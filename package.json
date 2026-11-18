@@ -2,10 +2,11 @@
   "name": "hsr-monster-adventure",
   "version": "1.0.0",
   "private": true,
-  "description": "雙人高鐵打怪升級冒險",
+  "description": "雙人連線高鐵打怪升級冒險：左營到南港",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=20"
@@ -13,5 +14,8 @@
   "dependencies": {
     "express": "^4.21.2",
     "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.1"
   }
 }
