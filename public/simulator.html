@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b192a">
+<meta name="description" content="700T 風格 3D 高鐵駕駛體驗：北上南下、直達或站站停、月台、隧道、橋梁、雨夜與到站廣播。">
+<title>HSR 3D｜台灣高鐵模擬駕駛</title>
+<link rel="stylesheet" href="/simulator.css">
+<script type="importmap">{"imports":{"three":"/vendor/three/build/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}</script>
+<script type="module" src="/simulator.js"></script>
+</head>
+<body>
+<div class="app-shell">
+<header class="global-nav">
+  <a class="brand" href="/"><span class="logo-mark">🚄</span><span><b>HSR <i>3D</i></b><small>TAIWAN TRAIN SIMULATOR</small></span></a>
+  <span class="desktop-subtitle">台灣高鐵 · 700T 風格模擬列車</span>
+  <a class="back-link" href="/"><span aria-hidden="true">↗</span> 返回雙人打怪冒險</a>
+</header>
+<main class="sim-layout">
+ <section class="viewport-panel" aria-label="3D 高鐵遊戲場景">
+   <div id="scene" class="scene" role="img" aria-label="700T 風格列車行駛於高鐵橋梁與隧道的互動 3D 場景"></div>
+   <div class="scene-top">
+     <div class="chapter-badge"><span class="record-dot"></span> 3D SIMULATION <span class="separator">/</span> <span id="sceneWeatherName">晴朗 · DAY</span></div>
+     <div class="camera-badge" id="cameraLabel">◈ 追蹤視角</div>
+   </div>
+   <div class="speed-hud">
+     <div class="speed-left"><span class="hud-overline">CURRENT SPEED</span><div><strong id="speedReadout">000</strong><span class="kmh">km/h</span></div></div>
+     <div class="speed-right"><span id="driveStatus">等待出發</span><div class="meter"><div id="speedGauge"></div></div><span id="distanceRemaining">距離下一停靠站 265 單位</span></div>
+   </div>
+   <div class="scene-bottom-hint">滑鼠拖曳自由視角 · 滾輪縮放 · 速度及停靠為縮時模擬</div>
+   <div id="webglError" class="error-overlay hidden" role="alert">無法啟動 3D 畫面。請使用支援 WebGL 的新版 Chrome、Edge 或 Firefox，並啟用硬體加速。</div>
+ </section>
+ <aside class="control-panel">
+  <div class="control-header"><div><span class="eyebrow">DRIVER CONSOLE <span>•</span> 駕駛儀表台</span><h1>今天，要開往哪裡？</h1></div><span class="console-icon">🎛️</span></div>
+  <div class="control-card route-card">
+    <div class="control-label"><span>01 / 行駛方向</span><span class="mini-text">DIRECTION</span></div>
+    <div class="button-pair" role="group" aria-label="行駛方向"><button class="choice active" data-direction="north" id="northBtn">↑ 北上 <small>左營 → 南港</small></button><button class="choice" data-direction="south" id="southBtn">↓ 南下 <small>南港 → 左營</small></button></div>
+    <div class="control-label second-label"><span>02 / 停靠模式</span><span class="mini-text">SERVICE</span></div>
+    <div class="button-pair" role="group" aria-label="停靠模式"><button class="choice active" data-route="local" id="localBtn">🚉 站站停靠 <small>每站上下車</small></button><button class="choice" data-route="express" id="expressBtn">⚡ 直達快車 <small>僅停主要站</small></button></div>
+  </div>
+  <div class="control-card"><div class="control-label"><span>03 / 時間與天氣</span><span class="mini-text">ENVIRONMENT</span></div><div class="weather-pills" role="group" aria-label="環境效果"><button data-weather="day" class="weather active">☀️ 晴天</button><button data-weather="sunset" class="weather">🌇 日落</button><button data-weather="night" class="weather">🌙 夜間</button><button data-weather="rain" class="weather">🌧️ 雨天</button></div></div>
+  <div class="control-card"><div class="control-label"><span>04 / 鏡頭視角</span><span class="mini-text">CAMERA</span></div><select id="cameraMode" aria-label="鏡頭視角"><option value="follow">🚄 列車追蹤</option><option value="cab">👁️ 駕駛室視角</option><option value="side">🚉 月台側視角</option><option value="free">🖱️ 自由旋轉視角</option></select><p class="card-note">車輛以程序化 3D 建模呈現，採用白色車身與橘色腰線的 700T 設計語彙。</p></div>
+  <div class="control-card speed-card"><div class="control-label"><span>05 / 目標速度</span><b><span id="targetSpeedText">260</span> km/h</b></div><input type="range" id="targetSpeed" min="80" max="300" step="10" value="260" aria-label="目標速度"><div class="slider-labels"><span>80</span><span>模擬最高 300 km/h</span><span>300</span></div></div>
+  <div class="drive-buttons"><button id="driveBtn" class="drive-btn">▶ 開始行駛</button><button id="resetBtn" class="reset-btn" aria-label="重新開始行程" title="重新開始行程">↺</button></div>
+  <div class="sound-settings"><button id="soundBtn" class="sound-toggle" aria-pressed="false">🔇 音效：關</button><button id="voiceBtn" class="sound-toggle" aria-pressed="true">📣 廣播：開</button></div>
+  <button class="pantograph" id="pantographBtn">⚡ 播放集電弓風切效果音 <span>▶</span></button>
+  <div class="tip">聲音須點擊按鈕才會啟用；集電弓風切聲為遊戲合成音效，非真實「音爆」。</div>
+ </aside>
+</main>
+<section class="route-section">
+ <div class="route-heading"><div><span class="eyebrow">LIVE ROUTE TRACKER</span><h2><span id="originName">左營</span> <span class="heading-arrow">→</span> <span id="destinationName">南港</span></h2></div><div class="station-count"><strong id="stationCount">01 / 12</strong><span>停靠站</span></div></div>
+ <div class="route-rail" id="routeRail" aria-live="polite"></div>
+ <div class="route-info"><div class="next-station"><span class="route-caption">下一停靠站 NEXT STOP</span><strong id="nextStopName">台南 Tainan</strong></div><div class="arrival-msg" id="announcementText" aria-live="polite">旅程準備就緒。點擊「開始行駛」即可出發。</div></div>
+</section>
+<footer class="foot">HSR 3D · 非官方教育與娛樂原型。列車、路線距離、停靠班次與音效均為遊戲模擬，不代表實際台灣高鐵營運。<a href="https://www.thsrc.com.tw/" target="_blank" rel="noopener noreferrer">台灣高鐵官方網站 ↗</a></footer>
+</div>
+</body>
+</html>

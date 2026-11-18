@@ -77,6 +77,8 @@ function publicState(room) {
 function makeServer() {
   const app = express();
   app.disable('x-powered-by');
+  // Expose local Three.js ESM assets so Render needs no external browser CDN.
+  app.use('/vendor/three', express.static(path.join(__dirname, 'node_modules', 'three'), { maxAge: '1d' }));
   app.use(express.static(path.join(__dirname, 'public')));
   app.get('/health', (_, res) => res.json({ ok: true, game: 'hsr-adventure', rooms: rooms.size }));
   const server = http.createServer(app);
