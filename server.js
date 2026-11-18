@@ -65,7 +65,8 @@ function publicState(room) {
   const encounter = room.encounters[room.stage] || null;
   return {
     code: room.code, route: room.route, phase: room.phase,
-    hostId: room.hostId, stage: room.stage, totalStages: room.encounters.length,
+    hostId: room.hostId, hostMode: room.hostMode, hostName: room.hostName,
+    hostConnected: !!room.hostId, stage: room.stage, totalStages: room.encounters.length,
     stationNames: STATIONS, station: encounter ? encounter.station : (room.stage >= room.encounters.length ? '南港' : '左營'),
     monster: room.monster ? { ...room.monster } : null,
     players: room.players.map(({ id, name, hp, maxHp, level, xp, xpNeeded, energy, coins, totalDamage }) =>
@@ -128,22 +129,38 @@ function makeServer() {
     if (!code) return;
     socket.leave(code);
     delete socket.data.roomCode;
+    const role = socket.data.role;
+    delete socket.data.role;
     const room = rooms.get(code);
     if (!room) return;
+    if (role === 'teacher') {
+      if (room.hostId === socket.id) {
+        room.hostId = null;
+        addLog(room, '👩‍🏫 老師暫時離線，學生可以繼續戰鬥。');
+        emit(room);
+      }
+      return;
+    }
+    const before = room.players.length;
     room.players = room.players.filter(p => p.id !== socket.id);
-    if (!room.players.length) {
+    if (before === room.players.length) return;
+    if (!room.players.length && room.hostMode !== 'teacher') {
       rooms.delete(code);
       return;
     }
-    if (room.hostId === socket.id) room.hostId = room.players[0].id;
+    if (room.hostMode === 'player' && room.hostId === socket.id) {
+      room.hostId = room.players[0]?.id || null;
+      room.hostName = room.players[0]?.name || '';
+    }
     if (room.phase === 'battle') room.phase = 'paused';
-    addLog(room, '🚪 一位玩家離線；等待另一位勇者重新加入。');
+    addLog(room, '🚪 一位學生離線；等待兩位勇者集合。');
     emit(room);
   }
   function attach(socket, room, name) {
     leave(socket);
     socket.join(room.code);
     socket.data.roomCode = room.code;
+    socket.data.role = 'player';
     room.players.push(freshPlayer(socket.id, cleanName(name)));
     if (room.players.length === 2 && room.phase === 'paused') {
       room.phase = 'battle';
@@ -152,22 +169,69 @@ function makeServer() {
     }
     emit(room);
   }
-  function withRoom(socket, ack, fn) {
+  function attachTeacher(socket, room) {
+    leave(socket);
+    if (room.hostId && room.hostId !== socket.id) {
+      const old = io.sockets.sockets.get(room.hostId);
+      if (old) {
+        old.leave(room.code);
+        delete old.data.roomCode;
+        delete old.data.role;
+        old.emit('room:teacherReplaced');
+      }
+    }
+    socket.join(room.code);
+    socket.data.roomCode = room.code;
+    socket.data.role = 'teacher';
+    room.hostId = socket.id;
+    emit(room);
+  }
+  function withRoom(socket, ack, fn, playerOnly = false) {
     const room = rooms.get(socket.data.roomCode);
     const player = room?.players.find(p => p.id === socket.id);
-    if (!room || !player) return ack?.({ ok: false, error: '請先加入房間' });
+    const teacher = room?.hostMode === 'teacher' && room.hostId === socket.id && socket.data.role === 'teacher';
+    if (!room || (!player && !teacher) || (playerOnly && !player)) {
+      return ack?.({ ok: false, error: playerOnly ? '只有學生玩家能進行戰鬥' : '請先加入房間' });
+    }
     fn(room, player);
   }
   io.on('connection', socket => {
     socket.on('room:create', (payload = {}, ack) => {
       if (rooms.size >= MAX_ROOMS) return ack?.({ ok: false, error: '目前房間已滿，請稍後再試' });
+      leave(socket);
       const code = codeForRoom();
-      const room = { code, hostId: socket.id, route: 'local', phase: 'lobby', players: [],
+      const room = { code, hostId: socket.id, hostMode: 'player', hostName: cleanName(payload.name), teacherToken: null,
+        route: 'local', phase: 'lobby', players: [],
         stage: 0, encounters: buildEncounters('local'), monster: null, nextEnemyAttack: 0,
         log: ['🚄 歡迎來到高鐵勇者冒險！'], touched: Date.now() };
       rooms.set(code, room);
       attach(socket, room, payload.name);
-      ack?.({ ok: true, code, playerId: socket.id });
+      ack?.({ ok: true, code, role: 'player' });
+    });
+    socket.on('room:createTeacher', (payload = {}, ack) => {
+      if (rooms.size >= MAX_ROOMS) return ack?.({ ok: false, error: '目前房間已滿，請稍後再試' });
+      leave(socket);
+      const code = codeForRoom();
+      const teacherToken = crypto.randomBytes(32).toString('hex');
+      const teacherName = cleanName(payload.name || '老師');
+      const room = { code, hostId: null, hostMode: 'teacher', hostName: teacherName, teacherToken,
+        route: 'local', phase: 'lobby', players: [],
+        stage: 0, encounters: buildEncounters('local'), monster: null, nextEnemyAttack: 0,
+        log: [`👩‍🏫 ${teacherName} 建立教室，老師不占學生名額。`], touched: Date.now() };
+      rooms.set(code, room);
+      attachTeacher(socket, room);
+      ack?.({ ok: true, code, role: 'teacher', teacherToken });
+    });
+    socket.on('room:joinTeacher', (payload = {}, ack) => {
+      const room = rooms.get(cleanCode(payload.code));
+      if (!room || room.hostMode !== 'teacher') return ack?.({ ok: false, error: '找不到老師房間' });
+      const token = payload.teacherToken;
+      if (typeof token !== 'string' || !/^[0-9a-f]{64}$/.test(token) ||
+        !crypto.timingSafeEqual(Buffer.from(token), Buffer.from(room.teacherToken))) {
+        return ack?.({ ok: false, error: '老師管理憑證不正確' });
+      }
+      attachTeacher(socket, room);
+      ack?.({ ok: true, code: room.code, role: 'teacher' });
     });
     socket.on('room:join', (payload = {}, ack) => {
       const code = cleanCode(payload.code);
@@ -178,7 +242,7 @@ function makeServer() {
       attach(socket, room, payload.name);
       addLog(room, `👋 ${cleanName(payload.name)} 加入隊伍！`);
       emit(room);
-      ack?.({ ok: true, code, playerId: socket.id });
+      ack?.({ ok: true, code, role: 'player' });
     });
     socket.on('room:setRoute', (payload = {}, ack) => withRoom(socket, ack, room => {
       if (room.hostId !== socket.id || room.phase !== 'lobby') return ack?.({ ok: false, error: '只有房主能在出發前選擇路線' });
@@ -231,7 +295,7 @@ function makeServer() {
       if (room.monster.hp <= 0) monsterDefeated(room);
       else emit(room);
       ack?.({ ok: true });
-    }));
+    }, true));
     socket.on('game:restart', (_, ack) => withRoom(socket, ack, room => {
       if (room.hostId !== socket.id || !['finished', 'failed'].includes(room.phase)) return ack?.({ ok: false, error: '只有房主可以重新開始' });
       room.phase = 'lobby';

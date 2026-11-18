@@ -22,10 +22,18 @@ function toast(message, error = false) {
   toastTimer = setTimeout(() => wrap.replaceChildren(), 3100);
 }
 function getName() { return $('playerName').value.trim().slice(0, 14) || '小小勇者'; }
-function remember(code) { sessionStorage.setItem('hsr-name', getName()); sessionStorage.setItem('hsr-room', code); }
+function remember(code, role = 'player', token = '') {
+  sessionStorage.setItem('hsr-name', getName());
+  sessionStorage.setItem('hsr-room', code);
+  sessionStorage.setItem('hsr-role', role);
+  if (role === 'teacher' && token) sessionStorage.setItem('hsr-teacher-token', token);
+  else sessionStorage.removeItem('hsr-teacher-token');
+}
 function disconnectLocal() {
   state = null;
   sessionStorage.removeItem('hsr-room');
+  sessionStorage.removeItem('hsr-role');
+  sessionStorage.removeItem('hsr-teacher-token');
   show('entryView', true); show('roomView', false); show('gameView', false);
   show('intro', true); show('endOverlay', false);
 }
@@ -37,7 +45,19 @@ function request(event, data, onSuccess) {
     if (onSuccess) onSuccess(result);
   });
 }
-function createRoom() { request('room:create', { name: getName() }, r => { remember(r.code); toast('房間建立成功！分享代碼給朋友吧'); }); }
+function createRoom() {
+  request('room:create', { name: getName() }, r => {
+    remember(r.code, 'player');
+    toast('玩家房間建立成功！邀請第二位勇者加入');
+  });
+}
+function createTeacherRoom() {
+  const name = $('playerName').value.trim().slice(0, 14) || '老師';
+  request('room:createTeacher', { name }, r => {
+    remember(r.code, 'teacher', r.teacherToken);
+    toast('老師房間已建立！分享代碼給兩位學生');
+  });
+}
 function joinRoom() {
   const code = $('roomCodeInput').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (code.length !== 6) return toast('請輸入六位房間代碼', true);
@@ -45,6 +65,7 @@ function joinRoom() {
 }
 function currentPlayer() { return state?.players.find(p => p.id === socket.id); }
 function isHost() { return state?.hostId === socket.id; }
+function isTeacher() { return state?.hostMode === 'teacher' && isHost(); }
 function appendText(parent, tag, value, className) {
   const el = document.createElement(tag);
   if (className) el.className = className;
@@ -56,13 +77,19 @@ function percent(a, b) { return Math.max(0, Math.min(100, Math.round((a / (b || 
 function renderLobby() {
   $('roomCode').textContent = state.code;
   $('roomCount').textContent = `${state.players.length} / 2`;
+  const teacherRoom = state.hostMode === 'teacher';
+  show('teacherHostPanel', teacherRoom);
+  if (teacherRoom) {
+    $('teacherHostName').textContent = `${state.hostName || '老師'}${isTeacher() ? '（你）' : ''}`;
+    $('teacherHostStatus').textContent = state.hostConnected ? '🟢 老師已連線 · 不占學生名額' : '🟠 老師暫時離線';
+  }
   const area = $('lobbyPlayers'); area.replaceChildren();
   for (const p of state.players) {
     const div = appendText(area, 'div', '', 'lobby-player');
     appendText(div, 'span', '🧑‍🚀', 'lobby-avatar');
     const info = appendText(div, 'div', '');
     appendText(info, 'strong', p.name + (p.id === socket.id ? '（你）' : ''));
-    appendText(info, 'small', p.id === state.hostId ? '👑 房主' : '🎒 勇者隊員');
+    appendText(info, 'small', p.id === state.hostId ? '👑 玩家房主' : '🎒 學生勇者');
   }
   for (let i = state.players.length; i < 2; i++) {
     const div = appendText(area, 'div', '', 'lobby-player waiting');
@@ -76,10 +103,10 @@ function renderLobby() {
     btn.disabled = !isHost();
     btn.querySelector('.choose-indicator').textContent = selected ? '已選擇' : isHost() ? '選擇此路線' : '房主選擇路線';
   });
-  $('hostHint').textContent = isHost() ? '👑 你是房主，可更換路線' : '由房主決定';
+  $('hostHint').textContent = isHost() ? teacherRoom ? '👩‍🏫 老師可選擇路線' : '👑 你是房主' : teacherRoom ? '由老師決定' : '由房主決定';
   $('startBtn').disabled = !isHost() || state.players.length !== 2;
-  $('startBtn').textContent = isHost() ? state.players.length === 2 ? '🚄 開始冒險！' : '等待隊友加入' : '等待房主開始';
-  $('roomMessage').textContent = state.players.length === 2 ? '✅ 兩位勇者已集合，可以出發！' : '⏳ 等待第二位玩家加入...';
+  $('startBtn').textContent = isHost() ? state.players.length === 2 ? '🚄 開始冒險！' : '等待兩位學生加入' : teacherRoom ? '等待老師開始' : '等待房主開始';
+  $('roomMessage').textContent = state.players.length === 2 ? '✅ 兩位勇者已集合，可以出發！' : `⏳ 已有 ${state.players.length} / 2 位學生，等待加入...`;
 }
 function renderRoute() {
   $('trainModeLabel').textContent = state.route === 'express' ? '⚡ 直達快車' : '🚉 站站停靠';
@@ -132,6 +159,11 @@ function renderParty() {
     appendText(extra, 'span', `⚔️ ${p.totalDamage} 傷害`);
   });
   const me = currentPlayer();
+  const teacherViewing = isTeacher();
+  show('teacherWatchingNotice', teacherViewing);
+  show('actionControls', !teacherViewing);
+  show('energyBar', !teacherViewing);
+  if (teacherViewing) $('teacherWatchingNotice').textContent = `👩‍🏫 老師觀戰中：${state.players.length} / 2 位勇者，可查看血量、等級與戰鬥紀錄。`;
   const energy = me?.energy || 0;
   document.querySelectorAll('#energyDots span').forEach((dot, i) => dot.classList.toggle('full', i < energy));
   $('energyText').textContent = `${energy} / 3`;
@@ -158,8 +190,8 @@ function renderEnd() {
     appendText(item, 'small', `${p.name} · ${p.totalDamage} 傷害`);
   });
   $('restartBtn').disabled = !isHost();
-  $('restartBtn').textContent = isHost() ? '🔁 再次出發' : '等待房主重新開始';
-  $('restartHint').textContent = isHost() ? '重新回到準備室，可改選路線' : '只有房主可以重新開始遊戲';
+  $('restartBtn').textContent = isHost() ? '🔁 再次出發' : state.hostMode === 'teacher' ? '等待老師重新開始' : '等待房主重新開始';
+  $('restartHint').textContent = isHost() ? '重新回到準備室，可改選路線' : state.hostMode === 'teacher' ? '只有老師可以重新開始遊戲' : '只有房主可以重新開始遊戲';
 }
 function render() {
   if (!state) return;
@@ -174,6 +206,7 @@ function copyText(text) {
 }
 
 $('createBtn').addEventListener('click', createRoom);
+$('createTeacherBtn').addEventListener('click', createTeacherRoom);
 $('joinBtn').addEventListener('click', joinRoom);
 $('roomCodeInput').addEventListener('keydown', e => { if (e.key === 'Enter') joinRoom(); });
 $('copyCodeBtn').addEventListener('click', () => state && copyText(state.code));
@@ -198,8 +231,16 @@ document.addEventListener('keydown', e => {
 socket.on('connect', () => {
   $('onlineStatus').classList.remove('offline'); $('onlineStatus').lastChild.textContent = '已連線';
   const code = sessionStorage.getItem('hsr-room');
-  if (code) request('room:join', { code, name: sessionStorage.getItem('hsr-name') || getName() }, () => toast('已重新連上冒險房間'));
+  if (code) {
+    const teacher = sessionStorage.getItem('hsr-role') === 'teacher';
+    const event = teacher ? 'room:joinTeacher' : 'room:join';
+    const payload = teacher
+      ? { code, teacherToken: sessionStorage.getItem('hsr-teacher-token') }
+      : { code, name: sessionStorage.getItem('hsr-name') || getName() };
+    request(event, payload, () => toast(teacher ? '老師已重新連上教室' : '已重新連上冒險房間'));
+  }
 });
 socket.on('disconnect', () => { $('onlineStatus').classList.add('offline'); $('onlineStatus').lastChild.textContent = '連線中斷'; });
 socket.on('game:state', newState => { state = newState; render(); });
 socket.on('game:expired', () => { disconnectLocal(); toast('房間已逾時，請重新建立', true); });
+socket.on('room:teacherReplaced', () => { disconnectLocal(); toast('老師管理頁面已在其他裝置重新連線', true); });

@@ -35,14 +35,15 @@
       <section id="entryView" class="entry-layout">
         <div class="panel entry-card">
           <div class="section-kicker">STEP 01 · 加入冒險</div>
-          <h2>召集你的隊友</h2>
+          <h2>建立教室或加入冒險</h2>
           <p class="muted">只需要一個房間代碼，就能在不同裝置一起遊玩。</p>
-          <label for="playerName">你的勇者名稱</label>
+          <label for="playerName">你的名稱（老師或學生）</label>
           <input id="playerName" maxlength="14" autocomplete="nickname" placeholder="例如：閃電小火車" value="">
           <div class="field-split"><span>六位數房間代碼</span><span class="helper">由房主分享給你</span></div>
           <input id="roomCodeInput" maxlength="6" class="code-input" inputmode="text" autocapitalize="characters" placeholder="例如：A3BC7D">
-          <div class="entry-actions"><button class="btn primary" id="createBtn">＋ 建立新房間</button><button class="btn secondary" id="joinBtn">加入房間 <span>↗</span></button></div>
-          <div class="hint"><span>💡</span> 一個人建立房間，另一個人輸入代碼，兩人到齊就能出發。</div>
+          <div class="entry-actions teacher-actions"><button class="btn primary" id="createTeacherBtn">👩‍🏫 老師建立教室</button><button class="btn secondary" id="joinBtn">🎒 學生加入房間</button></div>
+          <button class="btn ghost small legacy-create" id="createBtn">🎮 兩位玩家自行建立房間（無老師）</button>
+          <div class="hint"><span>💡</span> 老師建立教室後不占位置，兩位學生可以一起加入。老師選擇路線、控制開始並觀戰。</div>
         </div>
         <div class="panel guide-card">
           <div class="section-kicker">HOW TO PLAY · 遊戲規則</div>
@@ -54,9 +55,10 @@
       </section>
 
       <section id="roomView" class="panel room-view hidden">
-        <div class="room-header"><div><div class="section-kicker">STEP 02 · 冒險準備室</div><h2>準備搭上勇者列車</h2><p class="muted">等待兩位勇者集合，房主選擇路線後即可開始。</p></div><button class="btn ghost small" id="leaveBtn">離開房間</button></div>
+        <div class="room-header"><div><div class="section-kicker">STEP 02 · 冒險準備室</div><h2>準備搭上勇者列車</h2><p class="muted">等待兩位學生勇者集合，由老師或玩家房主選擇路線後出發。</p></div><button class="btn ghost small" id="leaveBtn">離開房間</button></div>
         <div class="room-share"><div><span class="overline">你的房間代碼</span><div class="room-code" id="roomCode">------</div></div><div class="room-share-actions"><button id="copyCodeBtn" class="btn secondary small">複製代碼</button><button id="copyLinkBtn" class="btn primary small">分享邀請連結</button></div></div>
-        <h3 class="subheading">勇者隊伍 <span id="roomCount">1 / 2</span></h3>
+        <div id="teacherHostPanel" class="teacher-host-panel hidden"><span class="teacher-icon">👩‍🏫</span><div><strong id="teacherHostName">老師</strong><small id="teacherHostStatus">🟢 已連線 · 不占學生名額</small></div><span class="teacher-tag">教室房主</span></div>
+        <h3 class="subheading">學生勇者隊伍 <span id="roomCount">0 / 2</span></h3>
         <div id="lobbyPlayers" class="lobby-players"></div>
         <h3 class="subheading">選擇你的列車路線 <span id="hostHint">由房主決定</span></h3>
         <div class="route-choice-grid">
@@ -75,8 +77,9 @@
             <div class="monster-stage" id="monsterStage"><div class="monster-halo"></div><div class="monster-symbol" id="monsterEmoji" role="img" aria-label="怪物">🌾</div><span class="spark spark-one">✦</span><span class="spark spark-two">✳</span></div>
             <div class="monster-name" id="monsterName">稻田史萊姆</div><div class="monster-subtitle">MONSTER ENCOUNTER</div>
             <div class="hp-group"><div class="meter-caption"><span>怪物 HP</span><span id="monsterHpText">100 / 100</span></div><div class="bar large"><div class="bar-fill danger" id="monsterHpFill"></div></div></div>
-            <div class="action-controls"><button class="action attack" id="attackBtn"><span class="action-icon">⚔️</span><strong>普通攻擊</strong><small>累積 1 格能量</small><kbd>A</kbd></button><button class="action skill" id="skillBtn"><span class="action-icon">⚡</span><strong>必殺技</strong><small>消耗 3 格能量</small><kbd>S</kbd></button><button class="action heal" id="healBtn"><span class="action-icon">💚</span><strong>團隊補血</strong><small>消耗 2 格能量</small><kbd>D</kbd></button></div>
-            <div class="energy-bar">能量 <div id="energyDots" class="energy-dots"><span></span><span></span><span></span></div><span id="energyText">0 / 3</span></div>
+            <div id="teacherWatchingNotice" class="teacher-watching hidden">👩‍🏫 老師觀戰中</div>
+            <div class="action-controls" id="actionControls"><button class="action attack" id="attackBtn"><span class="action-icon">⚔️</span><strong>普通攻擊</strong><small>累積 1 格能量</small><kbd>A</kbd></button><button class="action skill" id="skillBtn"><span class="action-icon">⚡</span><strong>必殺技</strong><small>消耗 3 格能量</small><kbd>S</kbd></button><button class="action heal" id="healBtn"><span class="action-icon">💚</span><strong>團隊補血</strong><small>消耗 2 格能量</small><kbd>D</kbd></button></div>
+            <div class="energy-bar" id="energyBar">能量 <div id="energyDots" class="energy-dots"><span></span><span></span><span></span></div><span id="energyText">0 / 3</span></div>
           </div>
           <aside class="side-column"><div class="panel party-panel"><div class="side-heading"><h3>🧑‍🤝‍🧑 勇者隊伍</h3><span>LIVE</span></div><div id="battlePlayers"></div></div><div class="panel log-panel"><div class="side-heading"><h3>📜 冒險紀錄</h3><span>即時同步</span></div><div id="battleLog" class="battle-log" aria-live="polite"></div></div></aside>
         </div>
