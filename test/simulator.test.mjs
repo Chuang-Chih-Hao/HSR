@@ -88,7 +88,7 @@ test('manual controller replaces the automatic target speed slider',()=>{
   for (const id of ['powerUp','powerDown','brakeUp','brakeDown','doorBtn','emergencyBtn','retryBtn','cabInterior']) assert.match(html,new RegExp(`id="${id}"`));
   assert.doesNotMatch(html,/id="targetSpeed"/);
   assert.doesNotMatch(js,/approachingSpeed\(remaining/);
-  assert.match(js,/train\.root\.visible=mode!=='cab'/);
+  assert.match(js,/this\.train\.root\.visible=!interior/);
   assert.match(js,/function buildNose/);
   assert.match(js,/needsNextLeg/);
 });

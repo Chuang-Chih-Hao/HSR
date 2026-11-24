@@ -3,6 +3,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createItinerary, DIRECTION, ROUTE, LEG_DISTANCE, MAX_SPEED, stepManualDrive, estimateBrakingDistance, canOperateDoors, withinStopZone, speakableAnnouncement } from './sim-core.mjs';
 import { create700TCarLayout, noseSurfacePoint, noseSectionAt, TRAIN_LENGTH_700T, NOSE_LENGTH_700T } from './geometry-700t.mjs';
 
+import { buildDriverInterior, buildPassengerInterior, isInteriorMode, passengerPose } from './interior-700t.mjs';
+
 const $ = id => document.getElementById(id);
 const randomGenerator = (() => { let seed = 783021; return () => ((seed = (1664525 * seed + 1013904223) >>> 0) / 4294967296); })();
 const rnd = (a, b) => a + (b - a) * randomGenerator();
@@ -430,6 +432,10 @@ class HighSpeedRailSimulator {
     this.scene.add(this.sun);
     this.tunnel=buildTerrain(this.scene,this.movers);
     this.train=buildTrain(this.scene);this.rain=buildRain(this.scene);
+    this.cab3D=buildDriverInterior();this.scene.add(this.cab3D.root);
+    this.standard3D=buildPassengerInterior(false);this.scene.add(this.standard3D);
+    this.business3D=buildPassengerInterior(true);this.scene.add(this.business3D);
+    this.walk=8;
     this.arrivalGroup=null;this.departGroup=null;
     this.setWeather('day');
   }
@@ -468,14 +474,20 @@ class HighSpeedRailSimulator {
   }
   setView(mode){
     this.mode=mode;this.controls.enabled=mode==='free';
+    const interior=isInteriorMode(mode);
+    this.train.root.visible=!interior;
+    this.cab3D.root.visible=mode==='cab';
+    this.standard3D.visible=mode.startsWith('standard');
+    this.business3D.visible=mode.startsWith('business');
+    this.view.parentElement.classList.remove('cab-mode');
+    $('cabInterior').classList.add('hidden');
+    $('interiorControls').classList.toggle('hidden',!interior||mode==='cab');
+    this.camera.fov=interior?68:46;this.camera.near=interior?.035:.1;this.camera.updateProjectionMatrix();
     if(mode==='free'){this.camera.position.set(32,13,-189);this.controls.target.set(0,3,-137);this.controls.update();}
-    // The entire opaque carbody disappears only for the in-cab renderer.
-    // The physical exterior remains unchanged in chase/free/platform views.
-    this.train.root.visible=mode!=='cab';
-    this.view.parentElement.classList.toggle('cab-mode',mode==='cab');
-    $('cabInterior').classList.toggle('hidden',mode!=='cab');
-    $('cameraLabel').textContent={follow:'◈ 列車追蹤',cab:'◈ 駕駛室 · 真正前方視野',side:'◈ 車頭側面',nose:'◈ 700T 車鼻檢視',free:'◈ 自由旋轉'}[mode]||'◈ 鏡頭';
+    else this.updateCamera(1);
+    $('cameraLabel').textContent={follow:'◈ 列車追蹤',cab:'◈ 700T 立體駕駛室',standard:'◈ 2 車 標準車廂走道',business:'◈ 6 車 商務車廂走道',standardSeat:'◈ 標準車廂窗邊',businessSeat:'◈ 商務車廂窗邊',side:'◈ 車頭側面',nose:'◈ 700T 車鼻檢視',free:'◈ 自由旋轉'}[mode]||'◈ 鏡頭';
   }
+  walkInterior(delta){this.walk=Math.max(-8.7,Math.min(8.7,this.walk+delta));$('walkPosition').textContent=(this.walk+8.7).toFixed(1)+' m';}
   bindControls(){
     document.querySelectorAll('[data-direction]').forEach(button=>button.addEventListener('click',()=>{
       this.direction=button.dataset.direction;this.reset();
@@ -486,6 +498,12 @@ class HighSpeedRailSimulator {
     }));
     document.querySelectorAll('[data-weather]').forEach(b=>b.addEventListener('click',()=>this.setWeather(b.dataset.weather)));
     $('cameraMode').addEventListener('change',e=>this.setView(e.target.value));
+    $('walkForward').addEventListener('click',()=>this.walkInterior(-1.0));
+    $('walkBack').addEventListener('click',()=>this.walkInterior(1.0));
+    $('seatView').addEventListener('click',()=>{
+      const m=this.mode.endsWith('Seat')?this.mode.replace('Seat',''):this.mode+'Seat';
+      $('cameraMode').value=m;this.setView(m);$('seatView').textContent=m.endsWith('Seat')?'返回走道':'坐到窗邊';
+    });
     $('powerDown').addEventListener('click',()=>this.changePower(-1));
     $('powerUp').addEventListener('click',()=>this.changePower(1));
     $('brakeDown').addEventListener('click',()=>this.changeBrake(-1));
@@ -606,6 +624,7 @@ class HighSpeedRailSimulator {
     const warning= !this.atStation&&!this.overrun&&this.speed>16&&remaining<=recommend+20;
     $('brakingAlert').textContent=this.overrun?'⚠️ 越站了！點選「重試本站」':this.atStation?'請關門、解除煞車後加速':warning?'⚠️ 建議立即煞車，準備進站':`建議煞車距離：約 ${Math.ceil(recommend)} 模擬單位`;
     $('brakingAlert').classList.toggle('warning',warning||this.overrun);
+    if(this.mode==='cab')this.cab3D.update(this.speed,this.power,this.brake,this.doorsOpen);
     $('cabPowerValue').textContent=`P${this.power}`;
     $('cabBrakeValue').textContent=`B${this.brake}`;
     $('cabSpeedValue').textContent=String(Math.round(this.speed)).padStart(3,'0');
@@ -626,6 +645,8 @@ class HighSpeedRailSimulator {
   }
   updateCamera(dt){
     if(this.mode==='free'){this.controls.update();return;}
+    if(this.mode==='cab'){this.camera.position.set(-.40,3.49,-144.78);this.camera.lookAt(-.25,3.24,-165);return;}
+    if(isInteriorMode(this.mode)){const p=passengerPose(this.mode,this.walk);this.camera.position.set(...p.position);this.camera.lookAt(...p.target);if(this.camera.fov!==p.fov){this.camera.fov=p.fov;this.camera.updateProjectionMatrix();}return;}
     // In-cab view deliberately hides the opaque exterior and draws a dedicated
     // dashboard/windscreen overlay; this prevents the roof/nose clipping bug.
     const positions={follow:[22,12,-183],cab:[-.40,3.92,-143],side:[35,10,-131],nose:[16,8,-173]};

@@ -52,3 +52,5 @@
 .cab-display-bars i:nth-child(2){height:95%}.cab-display-bars i:nth-child(3){height:70%}
 .cab-handle{flex:0 0 60px;margin-bottom:0;align-self:center}
 @media(max-width:700px){.cab-dashboard{height:23%;gap:1%;padding:0 1%}.cab-display{border-width:2px}.cab-left-panel,.cab-right-panel{flex:.7}.cab-display p,.cab-status-line,.cab-lights{display:none}.cab-handle{display:none}.cab-instruments{min-width:100px}.cab-instruments>strong{font-size:24px}}
+/* Interior navigation; the 3D cabin is rendered by WebGL, not HTML overlay. */
+.interior-controls{margin-top:10px;padding:10px;border:1px solid #34495a;border-radius:9px;background:#142337}.interior-controls.hidden{display:none}.walk-label{display:flex;justify-content:space-between;color:#b5c5d3;font-size:12px;margin-bottom:8px}.interior-buttons{display:grid;grid-template-columns:1fr 1fr;gap:6px}.interior-buttons button{background:#22394b;color:#ecf2f6;border:1px solid #466075;border-radius:7px;padding:9px 5px;font-size:12px;cursor:pointer}.interior-buttons button:last-child{grid-column:1/-1}.cab-interior{display:none!important}
