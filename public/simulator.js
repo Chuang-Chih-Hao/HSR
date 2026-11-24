@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createItinerary, DIRECTION, ROUTE, LEG_DISTANCE, MAX_SPEED, stepManualDrive, estimateBrakingDistance, canOperateDoors, withinStopZone, speakableAnnouncement } from './sim-core.mjs';
+import { createItinerary, DIRECTION, ROUTE, LEG_DISTANCE, MAX_SPEED, stepManualDrive, estimateBrakingDistance, canOperateDoors, withinStopZone, speakableAnnouncement, stationApproach, TRAIN_FRONT_Z, PLATFORM_LENGTH, STOP_LATE } from './sim-core.mjs';
 import { create700TCarLayout, noseSurfacePoint, noseSectionAt, TRAIN_LENGTH_700T, NOSE_LENGTH_700T } from './geometry-700t.mjs';
 
 import { buildDriverInterior, buildPassengerInterior, isInteriorMode, passengerPose } from './interior-700t.mjs';
@@ -223,6 +223,11 @@ function buildTrain(scene) {
 
 function buildStation(station) {
   const group=new THREE.Group();group.userData.isStation=true;
+  const stationTrim=new THREE.MeshStandardMaterial({color:0x23475e,roughness:.48});
+  const stationWall=new THREE.MeshStandardMaterial({color:0xc7d1d4,roughness:.6});
+  const stationLight=new THREE.MeshBasicMaterial({color:0xffce68});
+  const stopGreen=new THREE.MeshBasicMaterial({color:0x68e9b3});
+  const nightSign=new THREE.MeshBasicMaterial({color:0xeaf5ff});
   for(const side of [-1,1]){
     const x=side*7.1;
     box(group,7.4,.45,334,materials.concrete,x,.18,0,true);
@@ -233,6 +238,20 @@ function buildStation(station) {
       const light=box(group,.15,.08,8.7,materials.lamp,side*6.3,6.26,z);
       light.material=materials.lamp;
     }
+    // Distinctive raised concourse, repeated station-name panels and yellow tactile strips.
+    box(group,4.8,8.4,48,stationWall,side*14.0,3.8,35);
+    box(group,5.3,.40,50,stationTrim,side*14,8.25,35);
+    for(let z=14;z<58;z+=5.5)box(group,.11,3.8,4.8,materials.glass,side*11.56,5.8,z);
+    box(group,.43,.035,334,stationLight,side*3.85,.445,0);
+    for(const z of [-135,-70,0,70,135]){
+      const label=makeSign(station.zh+'站',station.en,9);
+      label.position.set(side*8.4,4.65,z);label.rotation.y=side===1?-Math.PI/2:Math.PI/2;group.add(label);
+    }
+    // Stop board at the leading nose position when the train is centered.
+    const stop=makeSign('12 輛 停車','STOP',3.3);stop.position.set(side*3.1,3.45,TRAIN_FRONT_Z);group.add(stop);
+    box(group,.14,3.0,.14,stationTrim,side*3.1,1.5,TRAIN_FRONT_Z);
+    box(group,.18,.13,.18,stopGreen,side*3.1,4.02,TRAIN_FRONT_Z);
+    box(group,1.4,.055,.24,stopGreen,side*4.3,.49,TRAIN_FRONT_Z);
     const sign = makeSign(station.zh,station.en,10.3);
     sign.rotation.y=side===1?-Math.PI/2:Math.PI/2;
     sign.position.set(side*5.52,4.95,-2.0);
@@ -243,13 +262,23 @@ function buildStation(station) {
       box(group,.12,.19,.53,materials.orange,side*3.57,.53,z);
     }
   }
+  // Large front-facing entrance portals sit above the overhead line.
+  // These are gameplay wayfinding landmarks, not exact station architecture.
+  for(const z of [-163,163]){
+    for(const x of [-11.2,11.2])box(group,.70,10.8,.85,stationTrim,x,5.15,z);
+    box(group,23.0,.65,.85,stationTrim,0,10.3,z);
+    box(group,14,3.2,.25,stationTrim,0,9.85,z+.46);
+    const entrance=makeSign(station.zh+'站',station.en+'  /  HSR',12);
+    entrance.position.set(0,9.85,z+.62);group.add(entrance);
+    for(const x of [-7.6,7.6])box(group,.32,.34,.32,nightSign,x,10.1,z+.64);
+  }
   for(const z of [-169,169]){
     box(group,20,.45,2.8,materials.concrete,0,-.4,z);
   }
   return group;
 }
 function buildTerrain(scene,movers) {
-  const terrainGeo=new THREE.PlaneGeometry(720,1100,35,50);
+  const terrainGeo=new THREE.PlaneGeometry(720,1800,35,60);
   terrainGeo.rotateX(-Math.PI/2);
   const pos=terrainGeo.attributes.position;
   for(let i=0;i<pos.count;i++){
@@ -259,11 +288,11 @@ function buildTerrain(scene,movers) {
   }
   terrainGeo.computeVertexNormals();
   const landscape=new THREE.Mesh(terrainGeo,materials.grass);landscape.receiveShadow=true;scene.add(landscape);
-  box(scene,10.4,.72,1100,materials.concrete,0,-1.25,0);
-  box(scene,6.9,.22,1100,materials.track,0,-.74,0);
+  box(scene,10.4,.72,1800,materials.concrete,0,-1.25,0);
+  box(scene,6.9,.22,1800,materials.track,0,-.74,0);
   for(const x of [-1.12,1.12]){
-    box(scene,.14,.20,1100,materials.steel,x,-.37,0);
-    box(scene,.1,.08,1100,materials.roof,x,-.22,0);
+    box(scene,.14,.20,1800,materials.steel,x,-.37,0);
+    box(scene,.1,.08,1800,materials.roof,x,-.22,0);
   }
   for(let z=-365;z<335;z+=5.2){
     const sleeper=box(scene,4.1,.19,.68,materials.dark,0,-.62,z);
@@ -312,7 +341,7 @@ function buildTerrain(scene,movers) {
     }
     box(bridge,.20,.18,112,materials.steel,x,2.45,0);
   }
-  scene.add(bridge);movers.push({object:bridge,cycle:700});
+  scene.add(bridge);movers.push({object:bridge,cycle:700,stationClearance:65});
   const tunnel=new THREE.Group();tunnel.position.z=-295;
   const radius=11.7,len=75,segments=24,verts=[],indices=[];
   for(let ring=0;ring<2;ring++){
@@ -334,7 +363,7 @@ function buildTerrain(scene,movers) {
     if(z>-len/2 && z<len/2)box(tunnel,.37,.18,1.8,materials.lamp,0,10.6,z);
   }
   for(const x of [-11.65,11.65])box(tunnel,2.2,4.0,len,liningMat,x,1.4,0);
-  scene.add(tunnel);movers.push({object:tunnel,cycle:700});
+  scene.add(tunnel);movers.push({object:tunnel,cycle:700,stationClearance:45});
   // Background ridges provide a distinct Taiwanese west-coast mountain backdrop.
   for(let i=0;i<16;i++){
     const m=new THREE.Mesh(new THREE.ConeGeometry(rnd(55,100),rnd(75,165),5),new THREE.MeshStandardMaterial({color:i%2?0x557e6a:0x638b7c,roughness:1}));
@@ -415,7 +444,7 @@ class HighSpeedRailSimulator {
   }
   setupScene(){
     this.scene=new THREE.Scene();
-    this.scene.background=new THREE.Color(0x9eb6c8);this.scene.fog=new THREE.Fog(0x9eb6c8,150,750);
+    this.scene.background=new THREE.Color(0x9eb6c8);this.scene.fog=new THREE.Fog(0x9eb6c8,190,950);
     try{this.renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});}catch(e){$('webglError').classList.remove('hidden');throw e;}
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.6));
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;
@@ -515,6 +544,7 @@ class HighSpeedRailSimulator {
     $('emergencyBtn').addEventListener('click',()=>this.emergencyBrake());
     $('doorBtn').addEventListener('click',()=>this.toggleDoors());
     $('retryBtn').addEventListener('click',()=>this.retryLeg());
+    $('overrunRetry').addEventListener('click',()=>this.retryLeg());
     $('resetBtn').addEventListener('click',()=>this.reset());
     $('driveBtn').addEventListener('click',()=>this.toggleDrive());
     $('soundBtn').addEventListener('click',()=>{
@@ -610,7 +640,37 @@ class HighSpeedRailSimulator {
     $('stationCount').textContent=String(this.current+1).padStart(2,'0')+' / '+String(this.itinerary.stops.length).padStart(2,'0');
     const next=this.itinerary.stops[this.current+1];$('nextStopName').textContent=next?`${next.zh}  ${next.en}`:'旅程終點 · 已完成';
   }
+  updateStationHud(){
+    const next=this.itinerary.stops[this.current+1], current=this.itinerary.stops[this.current];
+    const state=stationApproach(this.distance,this.speed,this.weather==='rain');
+    const phase=this.overrun?'overrun':this.completed?'arrived':this.atStation?'arrived':state.phase;
+    const panel=$('stationHud'),overlay=$('overrunOverlay');
+    const station=(phase==='arrived'?current:next)||current;
+    panel.dataset.phase=phase;panel.classList.toggle('brake-now',!this.atStation&&!this.overrun&&state.brakeNow);
+    $('stationHudName').textContent=station.zh+'站';
+    $('stationHudLabel').textContent=({cruise:'下一停靠站',approach:'即將進站 · 準備煞車',platform:'已進入月台 · 對準停車標記',stop:'停車區 · 將速度降至 0',overrun:'已越過停車區',arrived:this.completed?'終點抵達':'目前停靠站'})[phase];
+    $('stationHudDistance').textContent=phase==='arrived'?'已停靠':phase==='overrun'?'越過 '+Math.ceil(Math.abs(state.remaining))+' 單位':state.remaining<0?'超前 '+Math.ceil(-state.remaining)+' 單位':'距停車點 '+Math.ceil(state.remaining)+' 單位';
+    $('stationHudAdvice').textContent=phase==='arrived'?'開關車門後手動發車':phase==='overrun'?'請重試本站':state.brakeNow?'⚠ 立即煞車！':'建議煞車距離 '+Math.ceil(state.braking)+' 單位';
+    $('stationHudProgress').style.width=(phase==='arrived'?100:Math.round(state.progress*100))+'%';
+    overlay.classList.toggle('hidden',!this.overrun);
+    if(this.overrun){
+      $('overrunStation').textContent=station.zh+'站';
+      $('overrunDistance').textContent='已超過停車點 '+Math.ceil(Math.abs(state.remaining))+' 單位 · 通過速度 '+Math.round(this.speed)+' km/h';
+    }
+  }
+  failStop(){
+    if(this.overrun)return;
+    this.overrun=true;this.power=0;this.brake=7;
+    const station=this.itinerary.stops[this.current+1];
+    this.updateStatus('⚠ 越站！模擬暫停 · 請重試本站');
+    const msg='越站警告，'+station.zh+'站未停妥，請重試本站。';
+    $('announcementText').textContent=msg;
+    if(this.audio.enabled){this.audio.init();[440,330,440].forEach((f,i)=>this.audio.tone(f,i*.24,.22));}
+    this.audio.speak(msg);
+    this.updateStationHud();
+  }
   updateUI(){
+    this.updateStationHud();
     $('speedReadout').textContent=String(Math.round(this.speed)).padStart(3,'0');
     $('speedGauge').style.width=`${this.speed/MAX_SPEED*100}%`;
     $('powerValue').textContent=`P${this.power}`;
@@ -671,16 +731,18 @@ class HighSpeedRailSimulator {
       if(this.departGroup)this.departGroup.position.z=this.distance;
       if(this.arrivalGroup)this.arrivalGroup.position.z=-LEG_DISTANCE+this.distance;
       for(const mover of this.movers){mover.object.position.z+=moved;if(mover.object.position.z>350)mover.object.position.z-=mover.cycle;}
-      if(remaining<80&&!this.announced){this.announced=true;this.announce('approach',this.itinerary.stops[this.current+1]);}
+      const approach=stationApproach(this.distance,this.speed,this.weather==='rain');
+      if(approach.phase!=='cruise'&&!this.announced){this.announced=true;this.announce('approach',this.itinerary.stops[this.current+1]);}
       if(withinStopZone(this.distance,this.speed))this.arrive();
-      else if(this.distance>LEG_DISTANCE+16){this.overrun=true;this.power=0;this.brake=7;this.updateStatus('⚠️ 越站！請重試本站');}
+      else if(this.distance>LEG_DISTANCE+STOP_LATE){this.failStop();}
       else if(this.speed>200)this.updateStatus('⚡ 高速行駛中 · 注意進站煞車');
-      else if(remaining<90)this.updateStatus('接近月台 · 請手動控制煞車');
+      else if(approach.phase==='platform'||approach.phase==='stop')this.updateStatus('月台停車區 · 對準 12 輛停車標記');
+      else if(approach.phase==='approach')this.updateStatus('即將進站 · 請手動控制煞車');
       else this.updateStatus(this.power>0?'手動加速中':this.brake>0?'手動煞車中':'滑行中');
       if(Math.abs(this.tunnel.position.z)<28&&this.speed>180&&this.audio.enabled&&!this.inTunnel)this.audio.pantograph();
       this.inTunnel=Math.abs(this.tunnel.position.z)<32;
     }
-    this.audio.setSpeed(this.speed);
+    this.audio.setSpeed(this.overrun?0:this.speed);
     this.doorLevel=THREE.MathUtils.damp(this.doorLevel,this.doorsOpen?1:0,3.2,dt);
     for(const d of this.train.doors){d.doorLeft.position.z=d.closedLeft-.40*this.doorLevel;d.doorRight.position.z=d.closedRight+.40*this.doorLevel;}
     if(this.speed>1)for(const w of this.train.wheels)w.rotation.x+=this.speed*.001*dt;
@@ -692,6 +754,10 @@ class HighSpeedRailSimulator {
         if(arr[i*3+2]>125)arr[i*3+2]=-150;
       }
       this.rain.rain.geometry.attributes.position.needsUpdate=true;
+    }
+    // Keep generic bridge/tunnel props out of platforms; station landmarks remain visible.
+    for(const mover of this.movers)if(mover.stationClearance){
+      mover.object.visible=![this.departGroup,this.arrivalGroup].some(st=>st&&Math.abs(st.position.z-mover.object.position.z)<PLATFORM_LENGTH/2+mover.stationClearance);
     }
     this.updateCamera(dt);this.updateUI();this.renderer.render(this.scene,this.camera);
   }

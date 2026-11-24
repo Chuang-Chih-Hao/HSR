@@ -35,9 +35,17 @@
      <div class="chapter-badge"><span class="record-dot"></span> 3D SIMULATION <span class="separator">/</span> <span id="sceneWeatherName">晴朗 · DAY</span></div>
      <div class="camera-badge" id="cameraLabel">◈ 追蹤視角</div>
    </div>
+   <div id="stationHud" class="station-hud" data-phase="arrived" aria-label="停靠站與煞車提示">
+     <div class="station-hud-top"><span id="stationHudLabel">目前停靠站</span><strong id="stationHudName">左營站</strong></div>
+     <div class="station-hud-bottom"><span id="stationHudDistance">已停靠</span><span id="stationHudAdvice">開關車門後手動發車</span></div>
+     <div class="station-hud-meter"><i id="stationHudProgress"></i></div>
+   </div>
+   <div id="overrunOverlay" class="overrun-overlay hidden" role="alert">
+     <div class="overrun-card"><span class="overrun-icon" aria-hidden="true">!</span><strong>越站了！</strong><p><span id="overrunStation"></span> 未正確停車</p><p id="overrunDistance"></p><button id="overrunRetry">重試本站</button><small>請提前煞車，對準月台停車標記。</small></div>
+   </div>
    <div class="speed-hud">
      <div class="speed-left"><span class="hud-overline">CURRENT SPEED</span><div><strong id="speedReadout">000</strong><span class="kmh">km/h</span></div></div>
-     <div class="speed-right"><span id="driveStatus">等待出發</span><div class="meter"><div id="speedGauge"></div></div><span id="distanceRemaining">距離下一停靠站 265 單位</span></div>
+     <div class="speed-right"><span id="driveStatus">等待出發</span><div class="meter"><div id="speedGauge"></div></div><span id="distanceRemaining">距離下一停靠站 950 單位</span></div>
    </div>
    <div class="scene-bottom-hint">手動駕駛：W/S 動力、D/A 煞車、E 緊急煞車、O 車門 · 滑鼠自由視角</div>
    <div id="webglError" class="error-overlay hidden" role="alert">無法啟動 3D 畫面。請使用支援 WebGL 的新版 Chrome、Edge 或 Firefox，並啟用硬體加速。</div>

@@ -15,7 +15,19 @@ export const SOUTH_TO_NORTH = Object.freeze([
 ]);
 export const DIRECTION = Object.freeze({ north: '北上', south: '南下' });
 export const ROUTE = Object.freeze({ local: '站站停靠', express: '直達快車' });
-export const LEG_DISTANCE = 265; // render units, deliberately not real kilometers
+// 304-unit train and 334-unit platform must not overlap adjacent stations.
+export const LEG_DISTANCE = 950; // gameplay render units, not real kilometers
+export const PLATFORM_LENGTH = 334;
+export const TRAIN_FRONT_Z = -152;
+export const STOP_EARLY = 13;
+export const STOP_LATE = 8;
+export const PLATFORM_ENTRY_DISTANCE = PLATFORM_LENGTH/2 - TRAIN_FRONT_Z;
+export function stationApproach(distance,speed,rain=false){
+ const remaining=LEG_DISTANCE-distance;
+ const braking=estimateBrakingDistance(speed,rain);
+ const phase=remaining < -STOP_LATE?'overrun':remaining<=STOP_EARLY?'stop':remaining<=PLATFORM_ENTRY_DISTANCE?'platform':remaining<=Math.max(420,braking+65)?'approach':'cruise';
+ return {remaining,braking,phase,brakeNow:remaining>=-STOP_LATE&&speed>3.2&&remaining<=braking+35,progress:Math.max(0,Math.min(1, distance/LEG_DISTANCE))};
+}
 export const MAX_SPEED = 300;
 
 export function createItinerary(direction = 'north', route = 'local') {
@@ -72,5 +84,5 @@ export function canOperateDoors(speed,power) {
   return Math.abs(Number(speed)||0)<.1 && (Number(power)||0)===0;
 }
 export function withinStopZone(distance,speed) {
-  return Number(distance)>=LEG_DISTANCE-13 && Number(distance)<=LEG_DISTANCE+8 && Number(speed)<=3.2;
+  return Number(distance)>=LEG_DISTANCE-STOP_EARLY && Number(distance)<=LEG_DISTANCE+STOP_LATE && Number(speed)<=3.2;
 }
