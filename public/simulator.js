@@ -409,7 +409,9 @@ class HighSpeedRailSimulator {
     this.current=0;this.distance=0;this.announced=false;this.doorsOpen=1;this.doorLevel=1;
     this.movers=[];this.lastTime=performance.now();this.weatherTimer=0;
     this.setupScene();this.bindControls();this.setView('follow');this.reset();this.animate();
-    window.addEventListener('resize',()=>this.resize());this.resize();
+    window.addEventListener('resize',()=>this.resize());
+    if(typeof ResizeObserver!=='undefined'){this.sceneResizeObserver=new ResizeObserver(()=>this.resize());this.sceneResizeObserver.observe(this.view);}
+    this.resize();
   }
   setupScene(){
     this.scene=new THREE.Scene();

@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="/simulator.css">
 <script type="importmap">{"imports":{"three":"/vendor/three/build/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}</script>
 <script type="module" src="/simulator.js"></script>
+<script type="module" src="/viewport-layout.mjs"></script>
 </head>
 <body>
 <div class="app-shell">
@@ -41,37 +42,40 @@
    <div class="scene-bottom-hint">手動駕駛：W/S 動力、D/A 煞車、E 緊急煞車、O 車門 · 滑鼠自由視角</div>
    <div id="webglError" class="error-overlay hidden" role="alert">無法啟動 3D 畫面。請使用支援 WebGL 的新版 Chrome、Edge 或 Firefox，並啟用硬體加速。</div>
  </section>
- <aside class="control-panel">
-  <div class="control-header"><div><span class="eyebrow">DRIVER CONSOLE <span>•</span> 駕駛儀表台</span><h1>今天，要開往哪裡？</h1></div><span class="console-icon">🎛️</span></div>
-  <div class="control-card route-card">
-    <div class="control-label"><span>01 / 行駛方向</span><span class="mini-text">DIRECTION</span></div>
-    <div class="button-pair" role="group" aria-label="行駛方向"><button class="choice active" data-direction="north" id="northBtn">↑ 北上 <small>左營 → 南港</small></button><button class="choice" data-direction="south" id="southBtn">↓ 南下 <small>南港 → 左營</small></button></div>
-    <div class="control-label second-label"><span>02 / 停靠模式</span><span class="mini-text">SERVICE</span></div>
-    <div class="button-pair" role="group" aria-label="停靠模式"><button class="choice active" data-route="local" id="localBtn">🚉 站站停靠 <small>每站上下車</small></button><button class="choice" data-route="express" id="expressBtn">⚡ 直達快車 <small>僅停主要站</small></button></div>
-  </div>
-  <div class="control-card"><div class="control-label"><span>03 / 時間與天氣</span><span class="mini-text">ENVIRONMENT</span></div><div class="weather-pills" role="group" aria-label="環境效果"><button data-weather="day" class="weather active">☀️ 晴天</button><button data-weather="sunset" class="weather">🌇 日落</button><button data-weather="night" class="weather">🌙 夜間</button><button data-weather="rain" class="weather">🌧️ 雨天</button></div></div>
-  <div class="control-card"><div class="control-label"><span>04 / 鏡頭視角</span><span class="mini-text">CAMERA</span></div><select id="cameraMode" aria-label="鏡頭視角"><option value="follow">🚄 列車追蹤</option><option value="cab">駕駛室（3D）</option><option value="standard">2 車｜標準車廂走道</option><option value="business">6 車｜商務車廂走道</option><option value="standardSeat">標準車廂｜窗邊座位</option><option value="businessSeat">商務車廂｜窗邊座位</option><option value="side">📐 車頭側視角</option><option value="nose">🚄 700T 車鼻檢視</option><option value="free">🖱️ 自由旋轉視角</option></select><div id="interiorControls" class="interior-controls hidden"><div class="walk-label">車廂內部位置 <span id="walkPosition">16.7 m</span></div><div class="interior-buttons"><button id="walkForward">向前走</button><button id="walkBack">向後走</button><button id="seatView">切換座位 / 走道</button></div></div><p class="card-note">駕駛室、標準車與商務車採實車照片參考的立體模型，尺寸為遊戲估算。</p><p class="card-note">車體採 700T 的 304 公尺／12 節編組比例；先頭車各 27 公尺、車鼻包含於車廂內，提供側面與 45° 檢視鏡頭。非原廠 CAD。</p></div>
-  <div class="control-card speed-card">
+ <aside class="control-panel" aria-label="駕駛控制面板">
+<div class="control-header"><div><span class="eyebrow">DRIVER CONSOLE <span>•</span> 駕駛儀表台</span><h1>今天，要開往哪裡？</h1></div><span class="console-icon">🎛️</span></div>
+<nav class="console-tabs" role="tablist" aria-label="控制面板分頁"><button type="button" role="tab" id="tab-drive" aria-controls="panel-drive" aria-selected="true" tabindex="0" data-tab="drive">駕駛</button><button type="button" role="tab" id="tab-route" aria-controls="panel-route" aria-selected="false" tabindex="-1" data-tab="route">路線</button><button type="button" role="tab" id="tab-camera" aria-controls="panel-camera" aria-selected="false" tabindex="-1" data-tab="camera">視角</button><button type="button" role="tab" id="tab-audio" aria-controls="panel-audio" aria-selected="false" tabindex="-1" data-tab="audio">音效</button><button type="button" role="tab" id="tab-progress" aria-controls="panel-progress" aria-selected="false" tabindex="-1" data-tab="progress">進度</button></nav>
+<div class="panel-slot"><div class="panel-inner">
+<section id="panel-drive" class="tab-pane is-active" role="tabpanel" aria-labelledby="tab-drive"><div class="control-card speed-card">
     <div class="control-label"><span>05 / 手動動力與煞車</span><span class="mini-text">MANUAL DRIVE</span></div>
     <div class="manual-control">
       <div class="notch-control"><span>🚄 動力</span><strong id="powerValue">P0</strong><div class="notch-buttons"><button id="powerDown" aria-label="減少動力段位">−</button><button id="powerUp" aria-label="增加動力段位">＋</button></div></div>
       <div class="notch-control brake"><span>🛑 煞車</span><strong id="brakeValue">B0</strong><div class="notch-buttons"><button id="brakeDown" aria-label="減少煞車段位">−</button><button id="brakeUp" aria-label="增加煞車段位">＋</button></div></div>
     </div>
-    <div class="manual-actions"><button id="doorBtn">🚪 關閉車門</button><button id="emergencyBtn">🚨 緊急煞車 B7</button></div>
+    
     <p id="brakingAlert" class="braking-advice" aria-live="polite">車門開啟，等待發車</p>
     <p class="card-note">先關門、啟用駕駛、加動力 P1–P5。進站須自行煞車 B1–B7；列車不會自動停車。</p>
-  </div>
-  <div class="drive-buttons"><button id="driveBtn" class="drive-btn">⚡ 啟用駕駛</button><button id="retryBtn" class="reset-btn hidden" title="重試本站">重試本站</button><button id="resetBtn" class="reset-btn" aria-label="重新開始行程" title="重新開始行程">↺</button></div>
-  <div class="sound-settings"><button id="soundBtn" class="sound-toggle" aria-pressed="false">🔇 音效：關</button><button id="voiceBtn" class="sound-toggle" aria-pressed="true">📣 廣播：開</button></div>
+  </div></section>
+<section id="panel-route" class="tab-pane" role="tabpanel" aria-labelledby="tab-route" hidden><div class="control-card route-card">
+    <div class="control-label"><span>01 / 行駛方向</span><span class="mini-text">DIRECTION</span></div>
+    <div class="button-pair" role="group" aria-label="行駛方向"><button class="choice active" data-direction="north" id="northBtn">↑ 北上 <small>左營 → 南港</small></button><button class="choice" data-direction="south" id="southBtn">↓ 南下 <small>南港 → 左營</small></button></div>
+    <div class="control-label second-label"><span>02 / 停靠模式</span><span class="mini-text">SERVICE</span></div>
+    <div class="button-pair" role="group" aria-label="停靠模式"><button class="choice active" data-route="local" id="localBtn">🚉 站站停靠 <small>每站上下車</small></button><button class="choice" data-route="express" id="expressBtn">⚡ 直達快車 <small>僅停主要站</small></button></div>
+  </div></section>
+<section id="panel-camera" class="tab-pane" role="tabpanel" aria-labelledby="tab-camera" hidden><div class="control-card"><div class="control-label"><span>04 / 鏡頭視角</span><span class="mini-text">CAMERA</span></div><select id="cameraMode" aria-label="鏡頭視角"><option value="follow">🚄 列車追蹤</option><option value="cab">駕駛室（3D）</option><option value="standard">2 車｜標準車廂走道</option><option value="business">6 車｜商務車廂走道</option><option value="standardSeat">標準車廂｜窗邊座位</option><option value="businessSeat">商務車廂｜窗邊座位</option><option value="side">📐 車頭側視角</option><option value="nose">🚄 700T 車鼻檢視</option><option value="free">🖱️ 自由旋轉視角</option></select><div id="interiorControls" class="interior-controls hidden"><div class="walk-label">車廂內部位置 <span id="walkPosition">16.7 m</span></div><div class="interior-buttons"><button id="walkForward">向前走</button><button id="walkBack">向後走</button><button id="seatView">切換座位 / 走道</button></div></div><p class="card-note">駕駛室、標準車與商務車採實車照片參考的立體模型，尺寸為遊戲估算。</p><p class="card-note">車體採 700T 的 304 公尺／12 節編組比例；先頭車各 27 公尺、車鼻包含於車廂內，提供側面與 45° 檢視鏡頭。非原廠 CAD。</p></div><div class="control-card"><div class="control-label"><span>03 / 時間與天氣</span><span class="mini-text">ENVIRONMENT</span></div><div class="weather-pills" role="group" aria-label="環境效果"><button data-weather="day" class="weather active">☀️ 晴天</button><button data-weather="sunset" class="weather">🌇 日落</button><button data-weather="night" class="weather">🌙 夜間</button><button data-weather="rain" class="weather">🌧️ 雨天</button></div></div></section>
+<section id="panel-audio" class="tab-pane" role="tabpanel" aria-labelledby="tab-audio" hidden><div class="sound-settings"><button id="soundBtn" class="sound-toggle" aria-pressed="false">🔇 音效：關</button><button id="voiceBtn" class="sound-toggle" aria-pressed="true">📣 廣播：開</button></div>
   <button class="pantograph" id="pantographBtn">⚡ 播放集電弓風切效果音 <span>▶</span></button>
-  <div class="tip">聲音須點擊按鈕才會啟用；集電弓風切聲為遊戲合成音效，非真實「音爆」。</div>
- </aside>
+  <div class="tip">聲音須點擊按鈕才會啟用；集電弓風切聲為遊戲合成音效，非真實「音爆」。</div></section>
+<section id="panel-progress" class="tab-pane" role="tabpanel" aria-labelledby="tab-progress" hidden><div id="routeMobile"></div></section>
+</div></div>
+<div class="persistent-controls"><div class="manual-actions"><button id="doorBtn">🚪 關閉車門</button><button id="emergencyBtn">🚨 緊急煞車 B7</button></div><div class="drive-buttons"><button id="driveBtn" class="drive-btn">⚡ 啟用駕駛</button><button id="retryBtn" class="reset-btn hidden" title="重試本站">重試本站</button><button id="resetBtn" class="reset-btn" aria-label="重新開始行程" title="重新開始行程">↺</button></div></div>
+</aside>
 </main>
-<section class="route-section">
+<div id="routeDesktop"><section class="route-section" id="routeTracker">
  <div class="route-heading"><div><span class="eyebrow">LIVE ROUTE TRACKER</span><h2><span id="originName">左營</span> <span class="heading-arrow">→</span> <span id="destinationName">南港</span></h2></div><div class="station-count"><strong id="stationCount">01 / 12</strong><span>停靠站</span></div></div>
  <div class="route-rail" id="routeRail" aria-live="polite"></div>
  <div class="route-info"><div class="next-station"><span class="route-caption">下一停靠站 NEXT STOP</span><strong id="nextStopName">台南 Tainan</strong></div><div class="arrival-msg" id="announcementText" aria-live="polite">旅程準備就緒。請手動控制動力、煞車與車門。</div></div>
-</section>
+</section></div>
 <footer class="foot">HSR 3D · 非官方教育與娛樂原型。列車、路線距離、手動動力／煞車參數、停靠班次與音效均為遊戲模擬，不代表實際台灣高鐵營運。<a href="https://www.thsrc.com.tw/" target="_blank" rel="noopener noreferrer">台灣高鐵官方網站 ↗</a></footer>
 </div>
 </body>

@@ -54,3 +54,56 @@
 @media(max-width:700px){.cab-dashboard{height:23%;gap:1%;padding:0 1%}.cab-display{border-width:2px}.cab-left-panel,.cab-right-panel{flex:.7}.cab-display p,.cab-status-line,.cab-lights{display:none}.cab-handle{display:none}.cab-instruments{min-width:100px}.cab-instruments>strong{font-size:24px}}
 /* Interior navigation; the 3D cabin is rendered by WebGL, not HTML overlay. */
 .interior-controls{margin-top:10px;padding:10px;border:1px solid #34495a;border-radius:9px;background:#142337}.interior-controls.hidden{display:none}.walk-label{display:flex;justify-content:space-between;color:#b5c5d3;font-size:12px;margin-bottom:8px}.interior-buttons{display:grid;grid-template-columns:1fr 1fr;gap:6px}.interior-buttons button{background:#22394b;color:#ecf2f6;border:1px solid #466075;border-radius:7px;padding:9px 5px;font-size:12px;cursor:pointer}.interior-buttons button:last-child{grid-column:1/-1}.cab-interior{display:none!important}
+
+/* Viewport-locked simulator: no document or panel vertical scrolling. */
+html,body{width:100%;height:100%;min-height:0;max-height:100%;overflow:hidden;overscroll-behavior:none}
+.app-shell{width:100%;max-width:none;height:100vh;height:100dvh;min-height:0;margin:0;padding:8px clamp(8px,1.2vw,22px);display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:8px;overflow:hidden}
+.global-nav{height:44px;min-height:0;gap:12px}.logo-mark{width:34px;height:34px;border-radius:8px;font-size:20px}.brand{gap:7px}.brand b{font-size:19px}.brand small{font-size:7px;letter-spacing:.1em}.desktop-subtitle{margin-left:4px;padding-left:12px}.back-link{font-size:11px;padding:7px 10px;white-space:nowrap}
+.sim-layout{min-width:0;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) clamp(270px,25vw,385px);grid-template-rows:minmax(0,1fr);gap:10px;align-items:stretch}
+.viewport-panel{min-height:0!important;height:100%;width:100%;min-width:0;border-radius:12px}.scene{min-width:0;min-height:0}.scene canvas{width:100%;height:100%}
+.scene-top{top:10px;left:10px;right:10px}.chapter-badge,.camera-badge{padding:6px 8px;font-size:10px}.speed-hud{bottom:27px;left:12px;width:min(400px,calc(100% - 24px));padding:8px 12px;gap:12px}.speed-left{min-width:112px}.speed-left strong{font-size:clamp(30px,4.6vh,48px)}.speed-right>span:first-child{margin-bottom:5px}.meter{margin-bottom:4px}.scene-bottom-hint{bottom:8px;left:12px;font-size:9px}
+.control-panel{display:flex;flex-direction:column;min-height:0;min-width:0;height:100%;overflow:hidden;padding:10px;gap:8px;border-radius:12px}
+.control-header{flex:0 0 auto;min-width:0;margin:0}.control-header h1{font-size:17px;margin:2px 0 0}.console-icon{font-size:20px}.control-header .eyebrow{font-size:9px}
+.console-tabs{display:flex;gap:4px;flex:0 0 auto;min-width:0}
+.console-tabs button{flex:1;min-width:0;padding:7px 2px;border-radius:7px;border:1px solid #385069;background:#192b40;color:#bacbdc;font-size:12px;font-weight:700;white-space:nowrap;min-height:32px}
+.console-tabs button[aria-selected="true"]{background:#49352b;color:#ffe3ce;border-color:#fb8e51}
+#tab-progress[hidden],.tab-pane[hidden]{display:none!important}
+.panel-slot{flex:1 1 0;min-height:0;min-width:0;overflow:hidden;position:relative}
+.panel-inner{width:100%;transform-origin:top left}
+.tab-pane{display:flex;flex-direction:column;gap:8px}
+.control-card{padding:10px;border-radius:9px}.control-label{margin-bottom:7px;font-size:12px}.second-label{margin-top:10px}.mini-text{font-size:8px}
+.choice{min-height:44px;padding:5px 4px;font-size:12px}.choice small{margin-top:2px;font-size:10px}.weather{padding:8px 2px}.card-note{margin:5px 0 0;line-height:1.4;font-size:10px}
+.manual-control{margin-top:5px;gap:7px}.notch-control{padding:8px;gap:5px}.notch-control strong{font-size:25px;line-height:1.1}.notch-buttons{gap:5px}.notch-buttons button{min-height:38px;font-size:19px}.braking-advice{margin:7px 0 0;line-height:1.3;font-size:11px}
+.persistent-controls{flex:0 0 auto;display:grid;gap:5px}.manual-actions{margin:0;gap:5px}.manual-actions button{font-size:12px;min-height:35px;padding:4px}.drive-buttons{margin:0;gap:5px}.drive-btn{min-height:39px;font-size:13px}.reset-btn{width:39px;font-size:20px}#retryBtn{min-width:72px;width:auto;padding:4px;font-size:11px}
+select{padding:8px 28px 8px 8px;font-size:12px;background-position:calc(100% - 16px) 14px,calc(100% - 11px) 14px}
+.interior-controls{padding:6px;margin-top:6px}.walk-label{margin-bottom:4px}.interior-buttons{grid-template-columns:1fr 1fr 1.25fr;gap:4px}.interior-buttons button{font-size:11px;padding:6px 3px;min-height:30px}.interior-buttons button:last-child{grid-column:auto}
+.sound-toggle,.pantograph{padding:8px 5px;min-height:34px}.tip{font-size:10px;line-height:1.4}.foot{padding:2px 0;text-align:left;font-size:10px;line-height:1.5}.foot a{margin:0;display:inline-block}
+#routeDesktop{min-width:0;min-height:0}.route-section{margin:0;padding:7px 12px;border-radius:11px;min-width:0}
+.route-heading{gap:5px;padding:0}.route-heading .eyebrow{display:none}.route-heading h2{font-size:15px;line-height:1.2;margin:0}.heading-arrow{padding:0 4px}.station-count{display:flex;align-items:center;gap:5px}.station-count strong{font-size:13px}.station-count span{font-size:10px}
+.route-rail{margin:5px 0 4px;gap:0}.route-rail:before{height:2px;top:9px}.station-circle{width:19px;height:19px;border-width:2px;margin:0 auto 2px;font-size:8px}.station-label{font-size:10px;writing-mode:horizontal-tb;letter-spacing:0;max-height:none}.station-stop.current .station-circle{box-shadow:0 0 0 3px #fb925a30}
+.route-info{display:flex;gap:10px;align-items:center;padding-top:5px}.next-station{flex:0 0 auto}.next-station strong{display:inline;font-size:11px;margin:0}.route-caption{font-size:9px;margin-right:4px}.arrival-msg{font-size:11px;line-height:1.25;min-width:0}
+#routeMobile .route-section{padding:6px 5px}#routeMobile .route-info{display:grid;gap:4px}#routeMobile .station-label{font-size:9px}
+@media (max-width:850px),(max-height:640px){
+ .app-shell{grid-template-rows:auto minmax(0,1fr);padding:5px;gap:5px}#routeDesktop{display:none}
+ .global-nav{height:34px}.brand small,.desktop-subtitle{display:none}.logo-mark{width:28px;height:28px;font-size:17px}.brand b{font-size:16px}.back-link{padding:5px 8px;font-size:10px}
+ .sim-layout{grid-template-columns:minmax(0,1fr) minmax(230px,36%);gap:5px}
+ .control-panel{padding:6px;gap:5px}.control-header{display:none}.console-tabs button{min-height:28px;font-size:11px;padding:4px 1px}
+ .control-card{padding:6px}.control-label{font-size:11px;margin-bottom:4px}.second-label{margin-top:6px}.mini-text{display:none}.choice{min-height:34px;font-size:11px;padding:4px 2px}.choice small{font-size:9px}
+ .tab-pane{gap:5px}.manual-control{margin-top:0;gap:5px}.notch-control{padding:5px;gap:3px}.notch-control>span{font-size:11px}.notch-control strong{font-size:21px}.notch-buttons button{min-height:32px;font-size:17px}
+ .manual-actions button{min-height:30px;font-size:11px}.drive-btn{min-height:33px;font-size:12px}.reset-btn{width:35px;font-size:18px}.persistent-controls{gap:4px}
+ .braking-advice{font-size:10px;line-height:1.25;margin-top:5px}.card-note{display:none}
+ .weather{padding:5px 1px}.interior-controls{padding:4px;margin-top:4px}.walk-label{font-size:10px;margin-bottom:3px}.interior-buttons button{min-height:27px;font-size:10px;padding:4px 2px}
+ .scene-top{top:7px;left:7px;right:7px}.chapter-badge,.camera-badge{font-size:9px;padding:4px 5px}.speed-hud{bottom:8px;left:7px;width:min(350px,calc(100% - 14px));padding:5px 8px;gap:7px}.speed-left{min-width:83px}.speed-left strong{font-size:30px}.hud-overline{font-size:8px}.kmh{font-size:10px;margin-left:4px}.speed-right>span:first-child{font-size:10px}.scene-bottom-hint{display:none}.meter{height:4px}#distanceRemaining{font-size:9px}
+}
+@media(max-width:850px) and (orientation:portrait), (max-width:530px){
+ .sim-layout{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,clamp(206px,40dvh,295px))}
+ .control-panel{width:100%}.console-tabs button{min-height:31px}.manual-actions button{min-height:33px}.drive-btn{min-height:34px}
+ .chapter-badge{letter-spacing:0}.camera-badge{max-width:55%;white-space:normal;text-align:right}
+ .tab-pane#panel-camera{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);align-items:start}.tab-pane#panel-camera .weather-pills{grid-template-columns:1fr 1fr}
+ .route-card .button-pair{gap:5px}.notch-control{grid-template-columns:auto 1fr;align-items:center}.notch-control strong{justify-self:end}.notch-buttons{grid-column:1/-1}
+ .route-section .station-label{font-size:9px}.route-caption{display:block}
+}
+@media(max-height:390px) and (min-width:531px){
+ .app-shell{padding:3px;gap:3px}.global-nav{height:28px}.logo-mark{width:24px;height:24px;font-size:14px}.control-panel{padding:4px;gap:4px}.console-tabs button{min-height:25px}.control-card{padding:5px}.choice{min-height:30px}.manual-actions button{min-height:27px}.drive-btn{min-height:29px}.speed-hud{padding:4px 6px}
+}
+@media(max-width:360px) and (orientation:portrait){.brand b{font-size:15px}.back-link{font-size:9px}.control-panel{padding:5px}.console-tabs button{font-size:10px}}
