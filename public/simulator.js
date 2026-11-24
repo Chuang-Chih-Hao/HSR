@@ -482,6 +482,8 @@ class HighSpeedRailSimulator {
     this.view.parentElement.classList.remove('cab-mode');
     $('cabInterior').classList.add('hidden');
     $('interiorControls').classList.toggle('hidden',!interior||mode==='cab');
+    $('seatView').textContent=mode.endsWith('Seat')?'返回走道':'坐到窗邊';
+    $('walkForward').disabled=mode.endsWith('Seat');$('walkBack').disabled=mode.endsWith('Seat');
     this.camera.fov=interior?68:46;this.camera.near=interior?.035:.1;this.camera.updateProjectionMatrix();
     if(mode==='free'){this.camera.position.set(32,13,-189);this.controls.target.set(0,3,-137);this.controls.update();}
     else this.updateCamera(1);

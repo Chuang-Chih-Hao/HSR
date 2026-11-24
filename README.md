@@ -190,3 +190,5 @@ npm test
 - 新增走道、窗邊視角、前後移動控制；窗戶是實際開口與透明玻璃，保留行駛中窗外風景。控制台的速度／動力／煞車／車門狀態與現有模擬核心同步。切回外部視角時隱藏內裝，以避免穿模。
 - 實車依據：[台灣高鐵車廂設施](https://www.thsrc.com.tw/ArticleContent/52ffe06e-3e38-4352-8170-93a768905dbd)、[車廂服務](https://www.thsrc.com.tw/ArticleContent/feb91116-8a73-46b7-a6b7-f115a3137ccf)、[TLife 駕駛室實拍](https://tlife.thsrc.com.tw/tw/article/1274)、[標準車照片](https://commons.wikimedia.org/wiki/File:Train_interior_of_THSR_700T_04.jpg)、[高鐵探索館](https://tdiscovery.thsrc.com.tw/exhibition.html)。
 - 模型座位行數、間距、窗格、控制器配置與材質為照片參考的近似重建，不是原廠 CAD 或完整實車客艙配置；未實作全 12 車內部、廁所或跨車步行。原老師房主與雙人打怪功能保留。
+
+標準車 2+3 座椅採偏向雙人座一側的走道中心；兩側最外緣座椅均保留側壁淨空。窗邊坐姿依實際模型座椅列位置計算，而非沿用任意走道座標。

@@ -7,11 +7,20 @@ export const CABIN_LAYOUT=Object.freeze({
  business:{seats:[2,2],pitch:1.16,seatWidth:.53,aisle:.69,rows:16,centerZ:-12.5}
 });
 export const isInteriorMode=mode=>['cab','standard','business','standardSeat','businessSeat'].includes(mode);
+export function aisleCenter(layout){return (layout.seats[0]-layout.seats[1])*(layout.seatWidth+.018)/2;}
+export function seatCenters(layout){
+ const xs=[],step=layout.seatWidth+.018,center=aisleCenter(layout);
+ for(let side=0;side<2;side++)for(let j=0;j<layout.seats[side];j++)xs.push(center+(side===0?-1:1)*(layout.aisle/2+layout.seatWidth/2+j*step));
+ return xs;
+}
 export function passengerPose(mode,walk=0){
  const business=mode.startsWith('business'),l=CABIN_LAYOUT[business?'business':'standard'];
  const seat=mode.endsWith('Seat');
- const z=Math.max(-8.7,Math.min(8.7,walk));
- return {position:[seat?-1.02:0,seat?2.42:2.92,l.centerZ+z],target:[seat?-3.5:0,seat?2.50:2.8,l.centerZ+z-(seat?.9:8)],fov:seat?68:70};
+ let z=Math.max(-8.7,Math.min(8.7,walk));
+ const center=aisleCenter(l),xs=seatCenters(l);
+ if(seat){const row=Math.max(0,Math.min(l.rows-1,Math.round(z/l.pitch+(l.rows-1)/2)));z=(row-(l.rows-1)/2)*l.pitch-.20;}
+ const x=seat?Math.min(...xs):center;
+ return {position:[x,seat?2.45:2.97,l.centerZ+z],target:[seat?-3.5:center,seat?2.67:2.85,l.centerZ+z-(seat?1.0:8)],fov:seat?64:70};
 }
 const material=(color,opts={})=>new THREE.MeshStandardMaterial({color,roughness:.72,...opts});
 function mesh(parent,geom,mat,x,y,z){
@@ -90,10 +99,7 @@ export function buildPassengerInterior(business=false){
   for(let i=0;i<bays;i++){
    const z=(i-(bays-1)/2)*spacing;
    box(root,.11,.91,.46,wall,x,2.79,z+spacing/2);
-   const window=rounded(root,1.62,.92,.025,.13,frame,x-side*.045,2.78,z);
-   window.rotation.y=side*Math.PI/2;
-   // Remove the solid centre of the decorative frame: use four slim bars, not a filled pane.
-   root.remove(window);window.geometry.dispose();
+   // Open glazing framed by slim rails.
    for(const dz of [-.82,.82])box(root,.13,.94,.07,frame,x,2.79,z+dz);
    for(const yy of [2.31,3.27])box(root,.13,.065,1.68,frame,x,yy,z);
    box(root,.013,.88,1.65,windowGlass,x+side*.012,2.79,z);
@@ -135,7 +141,7 @@ export function buildPassengerInterior(business=false){
   const z=(i-(l.rows-1)/2)*l.pitch;
   for(let side=0;side<2;side++){
    const n=l.seats[side],sg=side===0?-1:1;
-   for(let j=0;j<n;j++)positions.push([sg*(l.aisle/2+w/2+j*step),0,z]);
+   for(let j=0;j<n;j++)positions.push([aisleCenter(l)+sg*(l.aisle/2+w/2+j*step),0,z]);
   }
  }
  template.updateMatrixWorld(true);
