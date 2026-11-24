@@ -59,7 +59,7 @@ test('full train body layout, camera and 334m platform follow the 304m dimension
   assert.match(sim,/create700TCarLayout\(\)/);
   assert.match(sim,/new THREE\.Mesh\(makeCarProfile\(bodyLength\)/);
   assert.match(sim,/buildNose\(group,isFront,car\.noseAnchor\)/);
-  assert.match(sim,/box\(group,7\.4,\.45,334,materials\.concrete/);
+  assert.match(sim,/box\(group,PLATFORM_WIDTH,\.76,334,materials\.concrete/);
   assert.doesNotMatch(sim,/buildNose\(root,true,-89\.7\)/);
   assert.doesNotMatch(sim,/\[11\.7,\.55/);
   assert.match(sim,/nose:\[16,8,-173\]/);

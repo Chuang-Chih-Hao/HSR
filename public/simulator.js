@@ -7,7 +7,8 @@ import { buildDriverInterior, buildPassengerInterior, isInteriorMode, passengerP
 
 import { DOOR_WIDTH, DOOR_BOTTOM, DOOR_TOP, doorPosition, doorOffset, skinStrip, bodySkin } from './door-700t.mjs';
 
-import { addStationArchitecture } from './station-700t.mjs';
+import { addStationArchitecture, stationModel } from './station-700t.mjs';
+import { PLATFORM_EDGE, PLATFORM_TOP, PLATFORM_WIDTH, platformShift, overlapsStation, translateBounds, sideLayout } from './station-space.mjs';
 
 const $ = id => document.getElementById(id);
 const randomGenerator = (() => { let seed = 783021; return () => ((seed = (1664525 * seed + 1013904223) >>> 0) / 4294967296); })();
@@ -277,32 +278,52 @@ function buildTrain(scene) {
   return {root,doors,wheels,layout};
 }
 
+function horizontalBounds(object){
+  object.updateMatrixWorld(true);
+  const b=new THREE.Box3().setFromObject(object);
+  return {minX:b.min.x-object.position.x,maxX:b.max.x-object.position.x,minZ:b.min.z-object.position.z,maxZ:b.max.z-object.position.z};
+}
 function buildStation(station) {
   const group=new THREE.Group();group.userData.isStation=true;
-  const stationTrim=new THREE.MeshStandardMaterial({color:0x23475e,roughness:.48});
-  const stationLight=new THREE.MeshBasicMaterial({color:0xffce68});
+  const p=stationModel(station),floorCanvas=document.createElement('canvas');floorCanvas.width=256;floorCanvas.height=256;
+  const ctx=floorCanvas.getContext('2d');
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++){ctx.fillStyle=['#a6a7a3','#b7b8b2','#989c99','#afb2ad'][(i*7+j*3)%4];ctx.fillRect(i*64,j*64,63,63);}
+  const tile=new THREE.CanvasTexture(floorCanvas);tile.colorSpace=THREE.SRGBColorSpace;tile.wrapS=tile.wrapT=THREE.RepeatWrapping;tile.repeat.set(5,167);
+  const floor=new THREE.MeshStandardMaterial({map:tile,color:0xffffff,roughness:.88});
+  const yellow=new THREE.MeshBasicMaterial({color:0xe8bd44}),orange=new THREE.MeshBasicMaterial({color:0xd7804a});
+  const trim=new THREE.MeshStandardMaterial({color:0x69757f,roughness:.62});
   const stopGreen=new THREE.MeshBasicMaterial({color:0x68e9b3});
   for(const side of [-1,1]){
-    const x=side*7.1;
-    box(group,7.4,.45,334,materials.concrete,x,.18,0,true);
-    box(group,.24,.23,335,materials.orange,side*3.5,.45,0);
-    box(group,.43,.035,334,stationLight,side*3.85,.445,0);
-    for(const z of [-135,-70,0,70,135]){
-      const label=makeSign(station.zh+'站',station.en,5.4);
-      label.position.set(side*7.5,4.7,z);label.rotation.y=side===1?-Math.PI/2:Math.PI/2;group.add(label);
+    const shift=platformShift(p,side),x=side*(PLATFORM_EDGE+PLATFORM_WIDTH/2)+shift;
+    const px=offset=>side*(PLATFORM_EDGE+offset)+shift;
+    // Deck surface aligned to the door threshold (1.175). Edge gap ~0.23 m.
+    box(group,PLATFORM_WIDTH,.76,334,materials.concrete,x,PLATFORM_TOP-.38,0,true);
+    const surface=new THREE.Mesh(new THREE.PlaneGeometry(PLATFORM_WIDTH,334),floor);
+    surface.rotation.x=-Math.PI/2;surface.position.set(x,PLATFORM_TOP+.005,0);group.add(surface);
+    box(group,.11,.025,334,materials.roof,px(.10),PLATFORM_TOP+.018,0);
+    box(group,.22,.027,334,yellow,px(.53),PLATFORM_TOP+.018,0);
+    box(group,.06,.018,334,orange,px(1.14),PLATFORM_TOP+.017,0);
+    box(group,.06,.018,334,orange,px(1.90),PLATFORM_TOP+.017,0);
+    for(let z=-155;z<=155;z+=25){
+      box(group,.82,.022,.10,orange,px(1.52),PLATFORM_TOP+.024,z);
+      const label=makeSign(station.zh,station.en,2.3);
+      label.position.set(px(5.0),4.8,z);label.rotation.y=side===1?-Math.PI/2:Math.PI/2;group.add(label);
+      const number=makeSign(String(Math.max(1,Math.min(12,Math.round((z+152)/25)+1)))+' 車','CAR',1.1);
+      number.position.set(px(2.7),4.9,z);group.add(number);
     }
-    const stop=makeSign('12 輛 停車','STOP',3.3);stop.position.set(side*3.1,3.45,TRAIN_FRONT_Z);group.add(stop);
-    box(group,.14,3.0,.14,stationTrim,side*3.1,1.5,TRAIN_FRONT_Z);
-    box(group,.18,.13,.18,stopGreen,side*3.1,4.02,TRAIN_FRONT_Z);
-    box(group,1.4,.055,.24,stopGreen,side*4.3,.49,TRAIN_FRONT_Z);
+    const stop=makeSign('12 輛 停車','STOP',2.0);stop.position.set(px(.9),3.7,TRAIN_FRONT_Z);group.add(stop);
+    box(group,.10,2.7,.10,trim,px(.9),PLATFORM_TOP+1.35,TRAIN_FRONT_Z);
+    box(group,.13,.10,.13,stopGreen,px(.9),4.04,TRAIN_FRONT_Z);
+    box(group,.82,.027,.22,stopGreen,px(.55),PLATFORM_TOP+.021,TRAIN_FRONT_Z);
     for(const z of [-96,-48,0,48,96]){
-      box(group,1.1,.16,4.0,materials.steel,side*7.2,.98,z);
-      box(group,.85,.55,4.0,materials.steel,side*7.62,1.26,z);
-      for(const dz of [-1.4,1.4])box(group,.14,.5,.14,materials.steel,side*7.2,.70,z+dz);
+      box(group,.72,.12,3.2,materials.steel,px(5.4),PLATFORM_TOP+.46,z);
+      box(group,.12,.47,3.2,materials.steel,px(5.75),PLATFORM_TOP+.77,z);
+      for(const dz of [-1.1,1.1])box(group,.12,.45,.12,materials.steel,px(5.4),PLATFORM_TOP+.225,z+dz);
     }
   }
   addStationArchitecture(group,station,{box,rod,cylinder,makeSign});
-  group.userData.architectureMaterials.push(stationTrim,stationLight,stopGreen);
+  group.userData.architectureMaterials.push(floor,yellow,orange,trim,stopGreen);
+  group.userData.bounds=horizontalBounds(group);
   return group;
 }
 
@@ -335,7 +356,7 @@ function buildTerrain(scene,movers) {
     box(pole,.55,.22,.3,materials.roof,0,7.72,0);
     box(pole,.075,.085,8,materials.steel,0,6.91,0);
     box(pole,.055,.035,8,materials.roof,0,6.75,0);
-    pole.position.z=z;scene.add(pole);movers.push({object:pole,cycle:700});
+    pole.position.z=z;scene.add(pole);movers.push({object:pole,cycle:700,stationObstacle:true});
   }
   for(let i=0;i<115;i++){
     const tree=new THREE.Group();
@@ -345,7 +366,7 @@ function buildTerrain(scene,movers) {
     cylinder(tree,.25,.45,height*.35,materials.bark,0,1.15,0,7);
     const pine=new THREE.Mesh(new THREE.ConeGeometry(height*.34,height,8),randomGenerator()>.45?materials.leaf:materials.leafLight);
     pine.position.y=height*.65; pine.castShadow=true;tree.add(pine);
-    scene.add(tree);movers.push({object:tree,cycle:700});
+    scene.add(tree);movers.push({object:tree,cycle:700,stationObstacle:true});
   }
   for(let i=0;i<20;i++){
     const building=new THREE.Group();building.position.set((i%2===0?-1:1)*rnd(35,105),0,rnd(-340,325));
@@ -353,7 +374,7 @@ function buildTerrain(scene,movers) {
     const color= new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(rnd(.52,.59),.09,rnd(.52,.76)),roughness:1});
     box(building,w,h,depth,color,0,h/2-3.4,0,true);
     for(const y of [h*.28,h*.56,h*.78])box(building,w+.1,.17,depth+.1,materials.steel,0,y-3.4,0);
-    scene.add(building);movers.push({object:building,cycle:700});
+    scene.add(building);movers.push({object:building,cycle:700,stationObstacle:true});
   }
   const bridge=new THREE.Group();bridge.position.z=-205;
   box(bridge,12,1.2,116,materials.concrete,0,-1.75,0);
@@ -370,7 +391,7 @@ function buildTerrain(scene,movers) {
     }
     box(bridge,.20,.18,112,materials.steel,x,2.45,0);
   }
-  scene.add(bridge);movers.push({object:bridge,cycle:700,stationClearance:65});
+  scene.add(bridge);movers.push({object:bridge,cycle:700,stationObstacle:true});
   const tunnel=new THREE.Group();tunnel.position.z=-295;
   const radius=11.7,len=75,segments=24,verts=[],indices=[];
   for(let ring=0;ring<2;ring++){
@@ -392,13 +413,14 @@ function buildTerrain(scene,movers) {
     if(z>-len/2 && z<len/2)box(tunnel,.37,.18,1.8,materials.lamp,0,10.6,z);
   }
   for(const x of [-11.65,11.65])box(tunnel,2.2,4.0,len,liningMat,x,1.4,0);
-  scene.add(tunnel);movers.push({object:tunnel,cycle:700,stationClearance:45});
+  scene.add(tunnel);movers.push({object:tunnel,cycle:700,stationObstacle:true});
   // Background ridges provide a distinct Taiwanese west-coast mountain backdrop.
   for(let i=0;i<16;i++){
     const m=new THREE.Mesh(new THREE.ConeGeometry(rnd(55,100),rnd(75,165),5),new THREE.MeshStandardMaterial({color:i%2?0x557e6a:0x638b7c,roughness:1}));
     m.position.set((i%2?1:-1)*rnd(160,330),rnd(-28,10),-330+i*43);
-    m.rotation.y=rnd(0,Math.PI);scene.add(m);
+    m.rotation.y=rnd(0,Math.PI);scene.add(m);movers.push({object:m,cycle:700,stationObstacle:true});
   }
+  for(const mover of movers)if(mover.stationObstacle)mover.bounds=horizontalBounds(mover.object);
   return tunnel;
 }
 function buildRain(scene){
@@ -772,10 +794,12 @@ class HighSpeedRailSimulator {
     this.audio.setSpeed(this.overrun?0:this.speed);
     this.doorLevel=THREE.MathUtils.damp(this.doorLevel,this.doorsOpen?1:0,3.2,dt);
     for(const d of this.train.doors){
-      const travel=doorOffset(this.doorLevel);
+      const station=this.itinerary.stops[this.current];
+      const activeSide=!sideLayout(stationModel(station))||d.side===1;
+      const travel=doorOffset(activeSide?this.doorLevel:0);
       d.doorLeft.position.z=d.closedLeft-travel;d.doorRight.position.z=d.closedRight+travel;
       // Leaves slide into the wall pocket rather than floating outside the train.
-      const inset=-d.side*.105*this.doorLevel;
+      const inset=-d.side*.105*(activeSide?this.doorLevel:0);
       d.doorLeft.position.x=inset;d.doorRight.position.x=inset;
     }
     if(this.speed>1)for(const w of this.train.wheels)w.rotation.x+=this.speed*.001*dt;
@@ -788,9 +812,12 @@ class HighSpeedRailSimulator {
       }
       this.rain.rain.geometry.attributes.position.needsUpdate=true;
     }
-    // Keep generic bridge/tunnel props out of platforms; station landmarks remain visible.
-    for(const mover of this.movers)if(mover.stationClearance){
-      mover.object.visible=![this.departGroup,this.arrivalGroup].some(st=>st&&Math.abs(st.position.z-mover.object.position.z)<(st.userData.clearance||PLATFORM_LENGTH/2)+mover.stationClearance);
+    // All scenery uses actual transformed bounds: a tree crown or building corner
+    // can intersect a station even when its origin lies outside the platform.
+    const reserved=[this.departGroup,this.arrivalGroup].filter(Boolean).map(st=>translateBounds(st.userData.bounds,st.position.x,st.position.z));
+    for(const mover of this.movers)if(mover.stationObstacle){
+      const obj=mover.object,b=translateBounds(mover.bounds,obj.position.x,obj.position.z);
+      obj.visible=!reserved.some(st=>overlapsStation(b,st,2.5));
     }
     this.updateCamera(dt);this.updateUI();this.renderer.render(this.scene,this.camera);
   }

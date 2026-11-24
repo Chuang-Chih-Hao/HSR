@@ -238,3 +238,12 @@ npm test
 - 保留 334 模擬單位月台及 12 輛停車標記、站名提示、越站重試及手動駕駛。北上南下使用相同站體；切換站點會回收舊站模型。
 - 限制：共用直線行駛軌道和縮時距離，地面與地下高度採軌道相對座標；附加軌道、月台位置、屋頂尺寸、地上建物與曲率為照片參考近似，不是原廠施工圖、完整車站室內或精確配線。板橋真實彎道、各站完整轉乘及直達車不停站通過場景尚未實作。
 - 測試：`node --test test/station-models.test.mjs`。
+
+
+## 2026-11-24｜車站穿模與實景構造修正
+
+- 新增站體與環境物件的實際 X/Z 包圍盒預留區：樹冠、建築、電車線支柱、橋梁、隧道及遠景山體均納入，循環移動後重新判定，避免外部物件穿進站棚。站內使用獨立電車線。
+- 月台採 9 m 模型寬度、1.12 m 高度與距軌道中心 1.92 m 的邊緣，貼近車門門檻（1.175 m），增加地磚、導引線及小型車廂號碼牌。側式月台站使用四股道、外側兩座月台及中間防風隔屏；停靠時只開鄰接月台側車門。軌道仍為遊戲化固定直線。
+- 台南、嘉義以同源斜屋頂及站軌分離配置重建，加入實拍可見的圓柱、Y 型鋼構、斜玻璃／百葉、深灰金屬屋面、單側站房與空橋。雲林、彰化、新竹、苗栗強化鋼構；台中保留大跨度無月台立柱結構。地下月台改為平板吊頂及長條燈，板橋彎道仍未實作。
+- 新的照片參考：[台南月台](https://commons.wikimedia.org/wiki/File:Platform_2,_THSR_Tainan_Station_20150705.jpg)、[嘉義月台](https://www.travelking.com.tw/tourguide/scenery104456.html)、[台中建築師照片](https://www.habitech.com.tw/en/portfolio-item/taichung-station-of-taiwan-high-speed-rail/)、[雲林縣政府月台](https://www.yunlin.gov.tw/News_Content.aspx?n=1244&s=214596)、[彰化建築師照片](https://www.krisyaoartech.com/en/projects/transportation/Changhua-High-Speed-Rail-Station)、[板橋月台](https://commons.wikimedia.org/wiki/File:Platform_at_THSR_Banqiao_Station_01.jpg)、[桃園月台照片](https://commons.wikimedia.org/wiki/Category:Platforms_at_Taoyuan_Station_(THSR))。
+- 此為照片參考的遊戲模型修正，不是實景掃描；不能在未完成 WebGL 實畫面對照前宣稱精準復刻全站。
