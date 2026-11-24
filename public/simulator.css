@@ -33,3 +33,22 @@
 .scene-top,.scene-bottom-hint,.speed-hud{z-index:3}
 .viewport-panel.cab-mode .speed-hud{display:none}
 .viewport-panel.cab-mode .scene-bottom-hint{bottom:23%;left:12%;font-size:11px;text-shadow:0 2px 8px #000}
+
+/* 700T driver's cab reference: low, broad dark console with several separate
+   monitors and recessed controls. The instruments are illustrative only. */
+.cab-dashboard{height:24%;left:1%;right:1%;border-radius:32% 32% 0 0 / 28% 28% 0 0;gap:1.2%;padding:0 2%;justify-content:space-between;background:linear-gradient(164deg,#48515a,#28303a 45%,#161c23)}
+.cab-display{box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:center;background:linear-gradient(150deg,#101b27,#050c14);border:5px solid #303a46;border-radius:7px;box-shadow:0 0 0 2px #777e82,inset 0 0 14px #297ea73b;color:#c7e7ee;height:63%;min-width:0;flex:1}
+.cab-display>span{color:#a0b9c2;font-size:clamp(7px,.82vw,11px);letter-spacing:.08em;white-space:nowrap}
+.cab-display p{font-size:clamp(7px,.7vw,10px);margin:6px 0 0;text-align:center;color:#86a4ae}
+.cab-instruments{flex:1.15;min-width:0;padding:4px;background:linear-gradient(#0b1722,#030b13);border-color:#475563}
+.cab-instruments>strong{font-size:clamp(19px,3.4vw,44px)}
+.cab-instruments>div{font-size:clamp(8px,.85vw,12px)}
+.cab-lights{display:flex;gap:8px;margin:8px 0}
+.cab-lights i{display:block;width:7px;height:7px;border-radius:50%;background:#7bd79e;box-shadow:0 0 7px #56d9a5}
+.cab-lights i:nth-child(3){background:#f5b552;box-shadow:0 0 7px #e8ad5c}
+.cab-status-line{font-size:10px;color:#70ab88}
+.cab-display-bars{display:flex;align-items:end;gap:7px;height:32px;margin-top:6px}
+.cab-display-bars i{height:45%;width:14px;background:#497d8c;border:1px solid #8bd1d7}
+.cab-display-bars i:nth-child(2){height:95%}.cab-display-bars i:nth-child(3){height:70%}
+.cab-handle{flex:0 0 60px;margin-bottom:0;align-self:center}
+@media(max-width:700px){.cab-dashboard{height:23%;gap:1%;padding:0 1%}.cab-display{border-width:2px}.cab-left-panel,.cab-right-panel{flex:.7}.cab-display p,.cab-status-line,.cab-lights{display:none}.cab-handle{display:none}.cab-instruments{min-width:100px}.cab-instruments>strong{font-size:24px}}

@@ -72,8 +72,8 @@ function buildNose(train, tipFront, anchor) {
   const rings=[
     [0,1.60,1.10,4.29], [1.0,1.60,1.09,4.25], [2.1,1.55,1.10,4.06],
     [3.5,1.44,1.13,3.83], [4.9,1.32,1.15,3.53], [6.3,1.17,1.16,3.13],
-    [7.7,1.01,1.20,2.76], [9.0,.85,1.22,2.40], [10.1,.69,1.26,2.14],
-    [10.9,.52,1.30,2.00], [11.4,.33,1.34,1.91], [11.7,.10,1.46,1.76]
+    [7.7,1.18,1.20,2.76], [9.0,1.05,1.22,2.43], [10.1,.95,1.24,2.18],
+    [10.9,.86,1.28,2.02], [11.4,.73,1.31,1.89], [11.7,.55,1.40,1.78]
   ];
   const segments=36, vertices=[],indices=[];
   const ringPoint=(ring,a,lift=0)=>{
@@ -113,26 +113,31 @@ function buildNose(train, tipFront, anchor) {
   makeRibbon(10.5,11.6,-.35,Math.PI+.35,materials.orange);
   // A broad curved dark windscreen on the upper sloping crown (both ends).
   const glassMaterial=new THREE.MeshPhysicalMaterial({color:0x132d42,metalness:.28,roughness:.17,clearcoat:.9,side:THREE.DoubleSide});
-  makeRibbon(1.65,4.85,.50,Math.PI-.50,glassMaterial);
+  makeRibbon(1.05,4.65,.39,Math.PI-.39,glassMaterial);
   // Sweep-back windshield edge and center dividing line.
-  for(const a of [.50,Math.PI-.50]){
+  for(const a of [.39,Math.PI-.39]){
     const top=rings[2],lower=rings[4];
     rod(train,ringPoint(top,a,.10),ringPoint(lower,a,.11),.055,materials.dark);
   }
-  // Small recessed headlights near the rounded low nose.
+  // On the 700T the four lamps sit INSIDE paired recessed housings below
+  // the lower edge of the black windscreen, not at the very front of the nose.
+  // Black housings are curved patches over the broad upper nose contour.
   for(const side of [-1,1]){
-    const lamp=new THREE.Mesh(new THREE.SphereGeometry(.16,12,8),materials.lamp);
-    lamp.scale.set(1.65,.70,1.40);
-    lamp.position.set(side*.48,1.94,anchor+sign*9.4);train.add(lamp);
-    const line=box(train,.04,.035,1.5,materials.scarlet,side*.91,1.67,anchor+sign*7.65);
-    line.rotation.y=side*.14;
+    const panel=makeRibbon(4.13,5.18,side<0?2.01:.76,side<0?2.43:1.13,materials.dark);
+    panel.renderOrder=2;
+    for(const xOffset of [.57,.84]){
+      const lamp=new THREE.Mesh(new THREE.SphereGeometry(.082,12,8),materials.lamp);
+      lamp.scale.set(1.18,.55,.50);
+      lamp.position.set(side*xOffset,2.91,anchor+sign*4.77);
+      train.add(lamp);
+    }
   }
 }
 function buildTrain(scene) {
   const root = new THREE.Group();root.name='700T inspired train';scene.add(root);
   const profile = makeCarProfile();const doors=[];const wheels=[];
-  for(let i=0;i<8;i++){
-    const group=new THREE.Group();group.position.z=-52.5+i*15;root.add(group);
+  for(let i=0;i<12;i++){
+    const group=new THREE.Group();group.position.z=-82.5+i*15;root.add(group);
     const body=new THREE.Mesh(profile,materials.white);body.position.z=-7.175;body.castShadow=true;body.receiveShadow=true;group.add(body);
     box(group,3.26,.35,14.05,materials.orange,0,1.87,0);
     for(const side of [-1,1]){
@@ -163,7 +168,7 @@ function buildTrain(scene) {
     }
     for(let j=0;j<3;j++)box(group,1.6,.08,.14,materials.steel,0,4.64,-3+j*3);
   }
-  buildNose(root,true,-59.7);buildNose(root,false,59.7);
+  buildNose(root,true,-89.7);buildNose(root,false,89.7);
   for(const position of [-20.3,20.5]){
     const pan=new THREE.Group();pan.position.set(0,4.62,position);root.add(pan);
     box(pan,2.3,.18,2.9,materials.dark,0,0,0);
@@ -183,9 +188,9 @@ function buildStation(station) {
   const group=new THREE.Group();group.userData.isStation=true;
   for(const side of [-1,1]){
     const x=side*7.1;
-    box(group,7.4,.45,147,materials.concrete,x,.18,0,true);
-    box(group,.24,.23,148,materials.orange,side*3.5,.45,0);
-    for(let z=-58;z<=58;z+=19){
+    box(group,7.4,.45,210,materials.concrete,x,.18,0,true);
+    box(group,.24,.23,211,materials.orange,side*3.5,.45,0);
+    for(let z=-96;z<=96;z+=19){
       cylinder(group,.14,.20,6.1,materials.steel,side*9.62,3.42,z,8);
       box(group,7.6,.29,16,materials.roof,side*7.03,6.45,z);
       const light=box(group,.15,.08,8.7,materials.lamp,side*6.3,6.26,z);
@@ -197,11 +202,11 @@ function buildStation(station) {
     group.add(sign);
     box(group,.12,1.5,9.5,materials.glass,side*4.15,1.45,0);
     box(group,1.1,.16,6.0,materials.steel,side*7.2,.60,8);
-    for(let z=-65;z<=65;z+=9){
+    for(let z=-99;z<=99;z+=9){
       box(group,.12,.19,.53,materials.orange,side*3.57,.53,z);
     }
   }
-  for(const z of [-74,74]){
+  for(const z of [-106,106]){
     box(group,20,.45,2.8,materials.concrete,0,-.4,z);
   }
   return group;
@@ -378,10 +383,10 @@ class HighSpeedRailSimulator {
     this.renderer.toneMappingExposure=1.17;this.renderer.shadowMap.enabled=true;
     this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     this.view.append(this.renderer.domElement);
-    this.camera=new THREE.PerspectiveCamera(46,1,.1,1600);this.camera.position.set(23,13,-102);
+    this.camera=new THREE.PerspectiveCamera(46,1,.1,1600);this.camera.position.set(26,15,-143);
     this.controls=new OrbitControls(this.camera,this.renderer.domElement);
     this.controls.enableDamping=true;this.controls.maxPolarAngle=1.50;
-    this.controls.minDistance=14;this.controls.maxDistance=220;this.controls.target.set(0,2,-35);
+    this.controls.minDistance=14;this.controls.maxDistance=220;this.controls.target.set(0,2,-48);
     this.controls.enabled=false;
     this.hemi=new THREE.HemisphereLight(0xffffff,0x385849,2.12);this.scene.add(this.hemi);
     this.sun=new THREE.DirectionalLight(0xfff5df,3.0);this.sun.position.set(-85,125,-95);this.sun.castShadow=true;
@@ -428,7 +433,7 @@ class HighSpeedRailSimulator {
   }
   setView(mode){
     this.mode=mode;this.controls.enabled=mode==='free';
-    if(mode==='free'){this.camera.position.set(23,13,-102);this.controls.target.set(0,2,-35);this.controls.update();}
+    if(mode==='free'){this.camera.position.set(26,15,-143);this.controls.target.set(0,2,-48);this.controls.update();}
     // The entire opaque carbody disappears only for the in-cab renderer.
     // The physical exterior remains unchanged in chase/free/platform views.
     this.train.root.visible=mode!=='cab';
@@ -588,8 +593,8 @@ class HighSpeedRailSimulator {
     if(this.mode==='free'){this.controls.update();return;}
     // In-cab view deliberately hides the opaque exterior and draws a dedicated
     // dashboard/windscreen overlay; this prevents the roof/nose clipping bug.
-    const positions={follow:[23,13,-102],cab:[-.40,3.77,-64.3],side:[24,8,-26]};
-    const targets={follow:[0,2,-35],cab:[-.4,2.8,-200],side:[0,2,-28]};
+    const positions={follow:[26,15,-143],cab:[-.40,3.82,-94.3],side:[26,9,-28]};
+    const targets={follow:[0,2,-48],cab:[-.4,2.8,-240],side:[0,2,-28]};
     const p=positions[this.mode]||positions.follow,look=targets[this.mode]||targets.follow;
     const factor=1-Math.exp(-dt*5);
     this.camera.position.lerp(new THREE.Vector3(...p),factor);

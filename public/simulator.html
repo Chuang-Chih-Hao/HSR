@@ -19,13 +19,15 @@
 </header>
 <main class="sim-layout">
  <section class="viewport-panel" aria-label="3D 高鐵遊戲場景">
-   <div id="scene" class="scene" role="img" aria-label="700T 風格列車行駛於高鐵橋梁與隧道的互動 3D 場景"></div>
+   <div id="scene" class="scene" role="img" aria-label="700T 外觀參考列車行駛於高鐵橋梁與隧道的互動 3D 場景"></div>
    <div id="cabInterior" class="cab-interior hidden" aria-hidden="true">
      <div class="cab-side-frame left"></div><div class="cab-side-frame right"></div>
      <div class="cab-upper-frame"></div>
-     <div class="cab-dashboard">
-       <div class="cab-instruments"><span>700T / DRIVER DISPLAY</span><strong><span id="cabSpeedValue">000</span><small> km/h</small></strong><div>動力 <b id="cabPowerValue">P0</b> · 煞車 <b id="cabBrakeValue">B0</b></div></div>
-       <div class="cab-handle"><div class="cab-handle-grip"></div><span>MASTER CONTROLLER</span></div>
+     <div class="cab-dashboard" aria-label="700T 參考外觀的遊戲化駕駛控制台">
+       <div class="cab-display cab-left-panel"><span>TRAIN SYSTEM</span><div class="cab-lights"><i></i><i></i><i></i><i></i></div><p>駕駛模式 / 運轉監視</p><div class="cab-status-line">ATC　■■■■■</div></div>
+       <div class="cab-instruments cab-display"><span>速度計 / SPEED</span><strong><span id="cabSpeedValue">000</span><small> km/h</small></strong><div>動力 <b id="cabPowerValue">P0</b> · 煞車 <b id="cabBrakeValue">B0</b></div></div>
+       <div class="cab-display cab-right-panel"><span>OPERATION MONITOR</span><div class="cab-display-bars"><i></i><i></i><i></i><i></i></div><p>列車狀態 · 運轉資訊</p></div>
+       <div class="cab-handle"><div class="cab-handle-grip"></div><span>POWER / BRAKE</span></div>
      </div>
    </div>
    <div class="scene-top">
