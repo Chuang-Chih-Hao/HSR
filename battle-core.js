@@ -3,7 +3,7 @@ const W=900,H=480, RANGE=100, SKILL_RANGE=185;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 function position(p,x,y){p.x=clamp(x,42,W-42);p.y=clamp(y,75,H-38);}
 function resetPlayer(p,i){Object.assign(p,{x:330+i*240,y:355,dx:0,dy:0,inputAt:0,goal:null,dodgeUntil:0,dodgeReady:0,combo:0,comboAt:0,face:i? -1:1});}
-function initArena(room,now){room.players.forEach(resetPlayer);Object.assign(room.monster,{x:450,y:168,mode:'chase',attackAt:now+2200,zone:null,pattern:0});room.arenaEvents=[];room.eventSeq=0;}
+function initArena(room,now){room.players.forEach(resetPlayer);Object.assign(room.monster,{x:450,y:168,mode:'chase',attackAt:now+2200,zone:null,pattern:0});room.arenaEvents=[];room.eventSeq=room.eventSeq||0;}
 function event(room,type,x,y,extra={}){const e={id:++room.eventSeq,type,x,y,...extra};room.arenaEvents.push(e);room.arenaEvents=room.arenaEvents.slice(-24);return e;}
 function input(p,payload,now){if(!payload||typeof payload!=='object')return false;
  if(payload.target&&Number.isFinite(payload.target.x)&&Number.isFinite(payload.target.y)){p.goal={x:clamp(payload.target.x,42,W-42),y:clamp(payload.target.y,75,H-38)};p.dx=p.dy=0;}
@@ -13,7 +13,7 @@ function dodge(room,p,now){if(p.hp<=0||now<p.dodgeReady)return false;const m=roo
  let dx=p.dx,dy=p.dy;if(p.goal){dx=p.goal.x-p.x;dy=p.goal.y-p.y;}if(Math.hypot(dx,dy)<.01){dx=p.x-m.x;dy=p.y-m.y;}const n=Math.hypot(dx,dy)||1;
  p.dodgeUntil=now+550;p.dodgeReady=now+1500;p.goal=null;const ox=p.x,oy=p.y;position(p,p.x+dx/n*125,p.y+dy/n*125);event(room,'dodge',p.x,p.y,{ox,oy,player:p.id});return true;}
 function step(room,now,dt){const m=room.monster,alive=room.players.filter(p=>p.hp>0);if(!m||!alive.length)return false;
- for(const p of alive){let x=p.dx||0,y=p.dy||0;if(p.goal){x=p.goal.x-p.x;y=p.goal.y-p.y;const n=Math.hypot(x,y);if(n<5){p.goal=null;x=y=0;}else{x/=n;y/=n;}}else if(now-p.inputAt>300){x=y=0;}
+ for(const p of alive){let x=p.dx||0,y=p.dy||0;if(p.goal){x=p.goal.x-p.x;y=p.goal.y-p.y;const n=Math.hypot(x,y);if(n<5){p.goal=null;x=y=0;}else{const scale=Math.min(1,n/(230*Math.max(dt,.001)));x=x/n*scale;y=y/n*scale;}}else if(now-p.inputAt>300){x=y=0;}
  if(Math.abs(x)>.01)p.face=Math.sign(x);position(p,p.x+x*230*dt,p.y+y*230*dt);}
  let changed=false;
  if(m.mode==='windup'&&now>=m.attackAt){
