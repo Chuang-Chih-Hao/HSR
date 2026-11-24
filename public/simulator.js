@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createItinerary, DIRECTION, ROUTE, LEG_DISTANCE, MAX_SPEED, stepManualDrive, estimateBrakingDistance, canOperateDoors, withinStopZone, speakableAnnouncement } from './sim-core.mjs';
+import { create700TCarLayout, noseSurfacePoint, noseSectionAt, TRAIN_LENGTH_700T, NOSE_LENGTH_700T } from './geometry-700t.mjs';
 
 const $ = id => document.getElementById(id);
 const randomGenerator = (() => { let seed = 783021; return () => ((seed = (1664525 * seed + 1013904223) >>> 0) / 4294967296); })();
@@ -12,6 +13,7 @@ const materials = {
   roof: new THREE.MeshStandardMaterial({ color: 0xcad4d8, metalness: .38, roughness: .48 }),
   steel: new THREE.MeshStandardMaterial({ color: 0x64717d, metalness: .72, roughness: .41 }),
   dark: new THREE.MeshStandardMaterial({ color: 0x101c27, roughness: .59, metalness: .14 }),
+  underbody: new THREE.MeshStandardMaterial({color:0x5a6168,roughness:.75,metalness:.16}),
   glass: new THREE.MeshPhysicalMaterial({ color: 0x18314a, metalness: .38, roughness: .18, transparent: true, opacity: .92 }),
   lamp: new THREE.MeshStandardMaterial({ color: 0xfff2c9, emissive: 0xffd991, emissiveIntensity: 1.45 }),
   concrete: new THREE.MeshStandardMaterial({ color: 0x9babb3, roughness: .88 }),
@@ -57,140 +59,166 @@ function makeSign(text, subText, w = 11) {
   return sign;
 }
 
-function makeCarProfile() {
-  const s = new THREE.Shape();
-  s.moveTo(-1.6,1.07); s.lineTo(1.6,1.07); s.lineTo(1.6,3.64);
-  s.bezierCurveTo(1.60,4.04,1.24,4.30,.83,4.33);
-  s.lineTo(-.83,4.33); s.bezierCurveTo(-1.24,4.30,-1.60,4.04,-1.60,3.64);
-  s.closePath();
-  return new THREE.ExtrudeGeometry(s,{depth:14.35,steps:1,bevelEnabled:true,bevelSize:.055,bevelThickness:.05,bevelSegments:2,curveSegments:8});
+function makeCarProfile(depth) {
+  // Straight body has exactly the same cross-sectional boundary as nose ring 0.
+  // Matching vertex contours eliminates the seam visible on the old extruded
+  // rectangle/capsule carbody at the nose-to-cab join.
+  const vertices=[],indices=[],segments=64;
+  for(const z of [0,depth])for(let j=0;j<segments;j++){
+    const [x,y]=noseSurfacePoint(0,j/segments*Math.PI*2,0,1);
+    vertices.push(x,y,z);
+  }
+  for(let j=0;j<segments;j++){
+    const n=j,m=(j+1)%segments,p=n+segments,q=m+segments;
+    indices.push(n,m,p,m,q,p);
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+  g.setIndex(indices);g.computeVertexNormals();
+  return g;
 }
-// Each end of the 700T-inspired train uses a rounded, multi-section duck-bill profile.
-// Unlike a cone, the broad low tip and upper glazing continue the carbody's shape.
-function buildNose(train, tipFront, anchor) {
-  const sign=tipFront?-1:1;
-  const rings=[
-    [0,1.60,1.10,4.29], [1.0,1.60,1.09,4.25], [2.1,1.55,1.10,4.06],
-    [3.5,1.44,1.13,3.83], [4.9,1.32,1.15,3.53], [6.3,1.17,1.16,3.13],
-    [7.7,1.18,1.20,2.76], [9.0,1.05,1.22,2.43], [10.1,.95,1.24,2.18],
-    [10.9,.86,1.28,2.02], [11.4,.73,1.31,1.89], [11.7,.55,1.40,1.78]
-  ];
-  const segments=36, vertices=[],indices=[];
-  const ringPoint=(ring,a,lift=0)=>{
-    const [distance,width,bottom,top]=ring;
-    const half=(top-bottom)/2, center=(top+bottom)/2;
-    return [width*Math.cos(a),center+half*Math.sin(a)+lift,anchor+sign*distance];
-  };
-  for(const r of rings)for(let j=0;j<segments;j++)vertices.push(...ringPoint(r,j/segments*Math.PI*2));
-  for(let i=0;i<rings.length-1;i++)for(let j=0;j<segments;j++){
-    const n=i*segments+j,m=i*segments+(j+1)%segments,p=(i+1)*segments+j,q=(i+1)*segments+(j+1)%segments;
-    if(tipFront)indices.push(n,p,m,m,p,q);else indices.push(n,m,p,m,q,p);
+
+/** One continuous, mirrored, 8 m 700T-inspired loft per end car.
+ * The head is SUBTRACTED from the 27 m end-car body, not tacked onto a 25 m coach.
+ */
+function buildNose(parent, isLeading, anchor) {
+  const sign=isLeading?-1:1;
+  const segments=64, rings=42, verts=[],tri=[];
+  const surface=(d,a,offset=0)=>noseSurfacePoint(d,a,anchor,sign,offset);
+  for(let i=0;i<=rings;i++){
+    const d=i/rings*NOSE_LENGTH_700T;
+    for(let j=0;j<segments;j++)verts.push(...surface(d,j/segments*Math.PI*2));
   }
-  const geom=new THREE.BufferGeometry();geom.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
-  geom.setIndex(indices);geom.computeVertexNormals();
-  const shell=new THREE.Mesh(geom,materials.white);shell.castShadow=true;shell.receiveShadow=true;train.add(shell);
-  // Mesh ribbons conform to the nose rather than floating square orange bars.
-  function makeRibbon(ringStart,ringEnd,aStart,aEnd,mat){
-    const pts=[],tri=[];const longitudinal=30,across=9;
-    function section(t){const val=ringStart+t*(ringEnd-ringStart);
-      for(let i=0;i<rings.length-1;i++)if(rings[i+1][0]>=val){const u=Math.min(1,(val-rings[i][0])/(rings[i+1][0]-rings[i][0]));
-        return rings[i].map((v,k)=>v+(rings[i+1][k]-v)*u);}
-      return rings.at(-1);
-    }
-    for(let k=0;k<=longitudinal;k++){
-      const t=k/longitudinal,r=section(t);
-      for(let j=0;j<=across;j++)pts.push(...ringPoint(r,aStart+(aEnd-aStart)*j/across,.055));
-    }
-    for(let k=0;k<longitudinal;k++)for(let j=0;j<across;j++){
-      const n=k*(across+1)+j,p=n+across+1;tri.push(n,p,n+1,n+1,p,p+1);
-    }
-    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));g.setIndex(tri);g.computeVertexNormals();
-    const mesh=new THREE.Mesh(g,mat);mesh.material.side=THREE.DoubleSide;train.add(mesh);return mesh;
+  for(let i=0;i<rings;i++)for(let j=0;j<segments;j++){
+    const u=i*segments+j,v=i*segments+(j+1)%segments;
+    const w=(i+1)*segments+j,x=(i+1)*segments+(j+1)%segments;
+    // Correct opposing normal directions for the two mirrored noses.
+    if(isLeading)tri.push(u,w,v,v,w,x);else tri.push(u,v,w,v,x,w);
   }
-  // The full-length orange waistline turns under the cab and meets the beak.
-  makeRibbon(.1,10.65,-.49,-.21,materials.orange);
-  makeRibbon(.1,10.65,Math.PI+.21,Math.PI+.49,materials.orange);
-  makeRibbon(10.5,11.6,-.35,Math.PI+.35,materials.orange);
-  // A broad curved dark windscreen on the upper sloping crown (both ends).
-  const glassMaterial=new THREE.MeshPhysicalMaterial({color:0x132d42,metalness:.28,roughness:.17,clearcoat:.9,side:THREE.DoubleSide});
-  makeRibbon(1.05,4.65,.39,Math.PI-.39,glassMaterial);
-  // Sweep-back windshield edge and center dividing line.
-  for(const a of [.39,Math.PI-.39]){
-    const top=rings[2],lower=rings[4];
-    rod(train,ringPoint(top,a,.10),ringPoint(lower,a,.11),.055,materials.dark);
-  }
-  // On the 700T the four lamps sit INSIDE paired recessed housings below
-  // the lower edge of the black windscreen, not at the very front of the nose.
-  // Black housings are curved patches over the broad upper nose contour.
-  for(const side of [-1,1]){
-    const panel=makeRibbon(4.13,5.18,side<0?2.01:.76,side<0?2.43:1.13,materials.dark);
-    panel.renderOrder=2;
-    for(const xOffset of [.57,.84]){
-      const lamp=new THREE.Mesh(new THREE.SphereGeometry(.082,12,8),materials.lamp);
-      lamp.scale.set(1.18,.55,.50);
-      lamp.position.set(side*xOffset,2.91,anchor+sign*4.77);
-      train.add(lamp);
-    }
-  }
-}
-function buildTrain(scene) {
-  const root = new THREE.Group();root.name='700T inspired train';scene.add(root);
-  const profile = makeCarProfile();const doors=[];const wheels=[];
-  for(let i=0;i<12;i++){
-    const group=new THREE.Group();group.position.z=-82.5+i*15;root.add(group);
-    const body=new THREE.Mesh(profile,materials.white);body.position.z=-7.175;body.castShadow=true;body.receiveShadow=true;group.add(body);
-    box(group,3.26,.35,14.05,materials.orange,0,1.87,0);
-    for(const side of [-1,1]){
-      box(group,.045,.34,14.1,materials.orange,side*1.665,1.88,0);
-      box(group,.05,.11,14.1,materials.scarlet,side*1.697,1.65,0);
-      for(let j=0;j<7;j++){
-        const offset=-5.25+j*1.73;
-        if(Math.abs(offset)>4.55)continue;
-        box(group,.06,.80,1.19,materials.glass,side*1.689,3.04,offset);
-        box(group,.065,.12,1.28,materials.roof,side*1.728,3.51,offset);
+  const geometry=new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+  geometry.setIndex(tri);geometry.computeVertexNormals();
+  const shell=new THREE.Mesh(geometry,materials.white);
+  shell.castShadow=true;shell.receiveShadow=true;
+  parent.add(shell);
+
+  // Procedurally conform trim directly to the exact interpolated skin. An
+  // outward radial offset avoids z-fighting and floating squared-off bars.
+  const patch=(start,end,angleA,angleB,material,offset=.015)=>{
+    const v=[],faces=[],longSegments=48,across=20;
+    for(let i=0;i<=longSegments;i++){
+      const t=i/longSegments,d=start+(end-start)*t;
+      for(let j=0;j<=across;j++){
+        const a=(typeof angleA==='function'?angleA(t):angleA)*(1-j/across)+
+                (typeof angleB==='function'?angleB(t):angleB)*(j/across);
+        v.push(...surface(d,a,offset));
       }
-      const doorLeft=box(group,.065,2.16,.60,materials.white,side*1.69,2.39,5.30);
-      const doorRight=box(group,.065,2.16,.60,materials.white,side*1.69,2.39,5.94);
-      box(doorLeft,.07,.64,.35,materials.glass,0,.31,.08);
-      box(doorRight,.07,.64,.35,materials.glass,0,.31,-.08);
-      doors.push({doorLeft,doorRight,closedLeft:doorLeft.position.z,closedRight:doorRight.position.z});
-      box(group,.062,.06,2.05,materials.steel,side*1.728,1.25,5.6);
     }
-    box(group,2.68,.30,12.2,materials.roof,0,4.43,0);
-    box(group,2.4,.34,12.7,materials.dark,0,.95,0);
-    for(const bogieZ of [-4.95,4.95]){
-      box(group,2.8,.45,2.5,materials.dark,0,.75,bogieZ);
+    for(let i=0;i<longSegments;i++)for(let j=0;j<across;j++){
+      const n=i*(across+1)+j,m=n+across+1;
+      faces.push(n,m,n+1,n+1,m,m+1);
+    }
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));
+    g.setIndex(faces);g.computeVertexNormals();
+    const obj=new THREE.Mesh(g,material);obj.material.side=THREE.DoubleSide;
+    parent.add(obj);return obj;
+  };
+  // 700T uses a wide orange waist/sweeping cheek on BOTH sides; the white
+  // central face remains visible. The two runs meet around the rounded lip.
+  patch(0,7.92,-.95,-.26,materials.orange,.022);
+  patch(0,7.92,Math.PI+.26,Math.PI+.95,materials.orange,.022);
+  patch(7.25,8.0,Math.PI-.03,Math.PI*2+.03,materials.orange,.025);
+  // Dark, low under-nose pan is distinct from the orange side cheeks.
+  patch(.0,7.55,Math.PI+1.07,Math.PI*2-1.07,materials.underbody,.018);
+
+  const glass=new THREE.MeshPhysicalMaterial({color:0x142938,roughness:.12,
+    metalness:.33,clearcoat:1,side:THREE.DoubleSide});
+  // Convex windshield: broad near the roof/cab and gently tapers as the
+  // glass follows the sloping upper surface. It is not a black rectangular box.
+  const edge=t=>.50+.46*t*t+.06*(1-t)*(1-t);
+  patch(.35,3.17,t=>edge(t),t=>Math.PI-edge(t),glass,.030);
+  // Tiny non-illuminated central windscreen divider and a slim wiper.
+  rod(parent,surface(.69,Math.PI/2,.048),surface(2.95,Math.PI/2,.050),.018,materials.dark);
+  // Four lights are small recessed pairs BELOW the windscreen, rather than
+  // two spherical headlights protruding from the tip.
+  for(const side of [-1,1]){
+    const a=side<0?Math.PI-1.03:1.03;
+    const housingMat=materials.dark;
+    patch(3.11,3.58,side<0?Math.PI-1.20:.83,side<0?Math.PI-.83:1.20,housingMat,.037);
+    for(const d of [3.24,3.46]){
+      const pos=surface(d,a,.073);
+      const light=new THREE.Mesh(new THREE.BoxGeometry(.22,.13,.08),materials.lamp);
+      light.position.set(...pos);light.rotation.x=sign*.30;
+      parent.add(light);
+    }
+  }
+  return shell;
+}
+
+function buildTrain(scene) {
+  const root=new THREE.Group();root.name='THSR 700T | 304m / 12 carriages';scene.add(root);
+  const doors=[],wheels=[];
+  const layout=create700TCarLayout();
+  for(const car of layout){
+    const {index,centerZ,bodyStart,bodyEnd,bodyLength,isFront,isRear}=car;
+    const group=new THREE.Group();group.name=`Car ${index+1} · ${car.length}m`;
+    group.position.z=centerZ;root.add(group);
+    const body=new THREE.Mesh(makeCarProfile(bodyLength),materials.white);
+    body.position.z=bodyStart;body.castShadow=true;body.receiveShadow=true;group.add(body);
+    const center=(bodyStart+bodyEnd)/2;
+    // Continuous orange and lower grey strips stay ON the straight portion.
+    for(const side of [-1,1]){
+      box(group,.028,.37,bodyLength-.12,materials.orange,side*1.699,1.92,center);
+      box(group,.031,.09,bodyLength-.12,materials.scarlet,side*1.718,1.685,center);
+      const doorPos = isFront ? bodyEnd-2.25 : isRear ? bodyStart+2.25 : bodyEnd-2.20;
+      for(let z=bodyStart+1.45;z<bodyEnd-1.25;z+=2.05){
+        if(Math.abs(z-doorPos)<1.42)continue;
+        box(group,.035,.76,1.26,materials.glass,side*1.704,3.12,z);
+        box(group,.039,.065,1.32,materials.roof,side*1.727,3.55,z);
+      }
+      const doorLeft=box(group,.036,2.13,.62,materials.white,side*1.725,2.24,doorPos-.31);
+      const doorRight=box(group,.036,2.13,.62,materials.white,side*1.725,2.24,doorPos+.31);
+      box(doorLeft,.043,.66,.31,materials.glass,0,.32,.08);
+      box(doorRight,.043,.66,.31,materials.glass,0,.32,-.08);
+      doors.push({doorLeft,doorRight,closedLeft:doorLeft.position.z,closedRight:doorRight.position.z});
+      box(group,.034,.045,1.9,materials.steel,side*1.725,1.19,doorPos);
+    }
+    box(group,2.75,.17,bodyLength-.35,materials.roof,0,4.56,center);
+    box(group,2.5,.27,bodyLength-.38,materials.dark,0,.80,center);
+    for(const wheelZ of [bodyStart+2.8,bodyEnd-2.8]){
+      box(group,2.75,.40,2.65,materials.dark,0,.67,wheelZ);
       for(const side of [-1,1]){
-        const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.47,.47,.20,16),materials.dark);
-        wheel.rotation.z=Math.PI/2;wheel.position.set(side*1.37,.47,bogieZ);
+        const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.45,.45,.18,18),materials.dark);
+        wheel.rotation.z=Math.PI/2;wheel.position.set(side*1.39,.47,wheelZ);
         group.add(wheel);wheels.push(wheel);
       }
     }
-    for(let j=0;j<3;j++)box(group,1.6,.08,.14,materials.steel,0,4.64,-3+j*3);
+    for(let z=bodyStart+2.4;z<bodyEnd-2;z+=4.6)box(group,1.55,.08,.15,materials.steel,0,4.73,z);
+    if(isFront||isRear)buildNose(group,isFront,car.noseAnchor);
   }
-  buildNose(root,true,-89.7);buildNose(root,false,89.7);
-  for(const position of [-20.3,20.5]){
-    const pan=new THREE.Group();pan.position.set(0,4.62,position);root.add(pan);
+  // Pantographs are on intermediate roofs rather than on the head car.
+  for(const index of [4,7]){
+    const pan=new THREE.Group();pan.position.set(0,4.74,layout[index].centerZ);root.add(pan);
     box(pan,2.3,.18,2.9,materials.dark,0,0,0);
     for(const x of [-.72,.72]){
       cylinder(pan,.24,.24,.37,materials.roof,x,.32,0,8);
-      rod(pan,[x,.56,-.92],[x,1.48,.34],.065,materials.steel);
-      rod(pan,[x,1.48,.34],[x,2.07,-.36],.065,materials.steel);
-      rod(pan,[x,.56,.92],[x,1.48,-.34],.05,materials.steel);
+      rod(pan,[x,.56,-.92],[x,1.37,.34],.065,materials.steel);
+      rod(pan,[x,1.37,.34],[x,1.94,-.36],.065,materials.steel);
+      rod(pan,[x,.56,.92],[x,1.37,-.34],.05,materials.steel);
     }
-    box(pan,2.9,.09,.18,materials.dark,0,2.09,-.35);
-    box(pan,2.5,.07,.09,materials.roof,0,2.18,-.35);
+    box(pan,2.9,.09,.18,materials.dark,0,2.01,-.35);
+    box(pan,2.5,.07,.09,materials.roof,0,2.10,-.35);
   }
-  return {root,doors,wheels};
+  return {root,doors,wheels,layout};
 }
 
 function buildStation(station) {
   const group=new THREE.Group();group.userData.isStation=true;
   for(const side of [-1,1]){
     const x=side*7.1;
-    box(group,7.4,.45,210,materials.concrete,x,.18,0,true);
-    box(group,.24,.23,211,materials.orange,side*3.5,.45,0);
-    for(let z=-96;z<=96;z+=19){
+    box(group,7.4,.45,334,materials.concrete,x,.18,0,true);
+    box(group,.24,.23,335,materials.orange,side*3.5,.45,0);
+    for(let z=-154;z<=154;z+=19){
       cylinder(group,.14,.20,6.1,materials.steel,side*9.62,3.42,z,8);
       box(group,7.6,.29,16,materials.roof,side*7.03,6.45,z);
       const light=box(group,.15,.08,8.7,materials.lamp,side*6.3,6.26,z);
@@ -202,11 +230,11 @@ function buildStation(station) {
     group.add(sign);
     box(group,.12,1.5,9.5,materials.glass,side*4.15,1.45,0);
     box(group,1.1,.16,6.0,materials.steel,side*7.2,.60,8);
-    for(let z=-99;z<=99;z+=9){
+    for(let z=-159;z<=159;z+=9){
       box(group,.12,.19,.53,materials.orange,side*3.57,.53,z);
     }
   }
-  for(const z of [-106,106]){
+  for(const z of [-169,169]){
     box(group,20,.45,2.8,materials.concrete,0,-.4,z);
   }
   return group;
@@ -433,13 +461,13 @@ class HighSpeedRailSimulator {
   }
   setView(mode){
     this.mode=mode;this.controls.enabled=mode==='free';
-    if(mode==='free'){this.camera.position.set(26,15,-143);this.controls.target.set(0,2,-48);this.controls.update();}
+    if(mode==='free'){this.camera.position.set(32,13,-189);this.controls.target.set(0,3,-137);this.controls.update();}
     // The entire opaque carbody disappears only for the in-cab renderer.
     // The physical exterior remains unchanged in chase/free/platform views.
     this.train.root.visible=mode!=='cab';
     this.view.parentElement.classList.toggle('cab-mode',mode==='cab');
     $('cabInterior').classList.toggle('hidden',mode!=='cab');
-    $('cameraLabel').textContent={follow:'◈ 列車追蹤',cab:'◈ 駕駛室 · 真正前方視野',side:'◈ 月台側面',free:'◈ 自由旋轉'}[mode]||'◈ 鏡頭';
+    $('cameraLabel').textContent={follow:'◈ 列車追蹤',cab:'◈ 駕駛室 · 真正前方視野',side:'◈ 車頭側面',nose:'◈ 700T 車鼻檢視',free:'◈ 自由旋轉'}[mode]||'◈ 鏡頭';
   }
   bindControls(){
     document.querySelectorAll('[data-direction]').forEach(button=>button.addEventListener('click',()=>{
@@ -593,8 +621,8 @@ class HighSpeedRailSimulator {
     if(this.mode==='free'){this.controls.update();return;}
     // In-cab view deliberately hides the opaque exterior and draws a dedicated
     // dashboard/windscreen overlay; this prevents the roof/nose clipping bug.
-    const positions={follow:[26,15,-143],cab:[-.40,3.82,-94.3],side:[26,9,-28]};
-    const targets={follow:[0,2,-48],cab:[-.4,2.8,-240],side:[0,2,-28]};
+    const positions={follow:[22,12,-183],cab:[-.40,3.92,-143],side:[35,10,-131],nose:[16,8,-173]};
+    const targets={follow:[0,2.8,-136],cab:[-.4,3.1,-270],side:[0,2.7,-123],nose:[0,2.6,-143]};
     const p=positions[this.mode]||positions.follow,look=targets[this.mode]||targets.follow;
     const factor=1-Math.exp(-dt*5);
     this.camera.position.lerp(new THREE.Vector3(...p),factor);
