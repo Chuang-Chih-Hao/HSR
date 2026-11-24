@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createItinerary, DIRECTION, ROUTE, LEG_DISTANCE, clampSpeed, approachingSpeed, speakableAnnouncement } from './sim-core.mjs';
+import { createItinerary, DIRECTION, ROUTE, LEG_DISTANCE, MAX_SPEED, stepManualDrive, estimateBrakingDistance, canOperateDoors, withinStopZone, speakableAnnouncement } from './sim-core.mjs';
 
 const $ = id => document.getElementById(id);
 const randomGenerator = (() => { let seed = 783021; return () => ((seed = (1664525 * seed + 1013904223) >>> 0) / 4294967296); })();
@@ -65,34 +65,67 @@ function makeCarProfile() {
   s.closePath();
   return new THREE.ExtrudeGeometry(s,{depth:14.35,steps:1,bevelEnabled:true,bevelSize:.055,bevelThickness:.05,bevelSegments:2,curveSegments:8});
 }
+// Each end of the 700T-inspired train uses a rounded, multi-section duck-bill profile.
+// Unlike a cone, the broad low tip and upper glazing continue the carbody's shape.
 function buildNose(train, tipFront, anchor) {
-  const sign = tipFront ? -1 : 1;
-  const rings = [
-    [0, 1.55,1.13,4.07], [1.4,1.50,1.13,4.01], [3.1,1.33,1.11,3.77],
-    [5.2,1.04,1.12,3.35], [7.0,.69,1.15,2.68], [8.3,.30,1.25,1.93], [8.8,.08,1.35,1.58]
+  const sign=tipFront?-1:1;
+  const rings=[
+    [0,1.60,1.10,4.29], [1.0,1.60,1.09,4.25], [2.1,1.55,1.10,4.06],
+    [3.5,1.44,1.13,3.83], [4.9,1.32,1.15,3.53], [6.3,1.17,1.16,3.13],
+    [7.7,1.01,1.20,2.76], [9.0,.85,1.22,2.40], [10.1,.69,1.26,2.14],
+    [10.9,.52,1.30,2.00], [11.4,.33,1.34,1.91], [11.7,.10,1.46,1.76]
   ];
-  const segments=24, verts=[],indices=[];
-  rings.forEach(([offset,width,bottom,top])=>{
-    for(let j=0;j<segments;j++) {
-      const a=j/segments*Math.PI*2;
-      verts.push(width*Math.cos(a), (top+bottom)/2+((top-bottom)/2)*Math.sin(a), anchor+sign*offset);
-    }
-  });
+  const segments=36, vertices=[],indices=[];
+  const ringPoint=(ring,a,lift=0)=>{
+    const [distance,width,bottom,top]=ring;
+    const half=(top-bottom)/2, center=(top+bottom)/2;
+    return [width*Math.cos(a),center+half*Math.sin(a)+lift,anchor+sign*distance];
+  };
+  for(const r of rings)for(let j=0;j<segments;j++)vertices.push(...ringPoint(r,j/segments*Math.PI*2));
   for(let i=0;i<rings.length-1;i++)for(let j=0;j<segments;j++){
-    const n=i*segments+j, m=i*segments+(j+1)%segments, p=(i+1)*segments+j,q=(i+1)*segments+(j+1)%segments;
-    indices.push(n,m,p,m,q,p);
+    const n=i*segments+j,m=i*segments+(j+1)%segments,p=(i+1)*segments+j,q=(i+1)*segments+(j+1)%segments;
+    if(tipFront)indices.push(n,p,m,m,p,q);else indices.push(n,m,p,m,q,p);
   }
-  const geom=new THREE.BufferGeometry(); geom.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));geom.setIndex(indices);geom.computeVertexNormals();
-  const nose = new THREE.Mesh(geom, new THREE.MeshPhysicalMaterial({color:0xf4f6f6,metalness:.15,roughness:.34,side:THREE.DoubleSide,clearcoat:.8}));
-  nose.castShadow = true; train.add(nose);
-  // Sloped, dark driver windscreen and signature orange racing line.
-  const wind = new THREE.Mesh(new THREE.BufferGeometry(), materials.glass);
-  const vz = tipFront ? [anchor-1.55,anchor-4.25] : [anchor+1.55,anchor+4.25];
-  const points=[[-1.22,3.84,vz[0]],[1.22,3.84,vz[0]],[-.82,3.25,vz[1]],[.82,3.25,vz[1]]];
-  const windGeom=new THREE.BufferGeometry(); windGeom.setAttribute('position',new THREE.Float32BufferAttribute(points.flat(),3));windGeom.setIndex([0,2,1,1,2,3]);windGeom.computeVertexNormals();wind.geometry=windGeom;wind.material.side=THREE.DoubleSide;train.add(wind);
+  const geom=new THREE.BufferGeometry();geom.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+  geom.setIndex(indices);geom.computeVertexNormals();
+  const shell=new THREE.Mesh(geom,materials.white);shell.castShadow=true;shell.receiveShadow=true;train.add(shell);
+  // Mesh ribbons conform to the nose rather than floating square orange bars.
+  function makeRibbon(ringStart,ringEnd,aStart,aEnd,mat){
+    const pts=[],tri=[];const longitudinal=30,across=9;
+    function section(t){const val=ringStart+t*(ringEnd-ringStart);
+      for(let i=0;i<rings.length-1;i++)if(rings[i+1][0]>=val){const u=Math.min(1,(val-rings[i][0])/(rings[i+1][0]-rings[i][0]));
+        return rings[i].map((v,k)=>v+(rings[i+1][k]-v)*u);}
+      return rings.at(-1);
+    }
+    for(let k=0;k<=longitudinal;k++){
+      const t=k/longitudinal,r=section(t);
+      for(let j=0;j<=across;j++)pts.push(...ringPoint(r,aStart+(aEnd-aStart)*j/across,.055));
+    }
+    for(let k=0;k<longitudinal;k++)for(let j=0;j<across;j++){
+      const n=k*(across+1)+j,p=n+across+1;tri.push(n,p,n+1,n+1,p,p+1);
+    }
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));g.setIndex(tri);g.computeVertexNormals();
+    const mesh=new THREE.Mesh(g,mat);mesh.material.side=THREE.DoubleSide;train.add(mesh);return mesh;
+  }
+  // The full-length orange waistline turns under the cab and meets the beak.
+  makeRibbon(.1,10.65,-.49,-.21,materials.orange);
+  makeRibbon(.1,10.65,Math.PI+.21,Math.PI+.49,materials.orange);
+  makeRibbon(10.5,11.6,-.35,Math.PI+.35,materials.orange);
+  // A broad curved dark windscreen on the upper sloping crown (both ends).
+  const glassMaterial=new THREE.MeshPhysicalMaterial({color:0x132d42,metalness:.28,roughness:.17,clearcoat:.9,side:THREE.DoubleSide});
+  makeRibbon(1.65,4.85,.50,Math.PI-.50,glassMaterial);
+  // Sweep-back windshield edge and center dividing line.
+  for(const a of [.50,Math.PI-.50]){
+    const top=rings[2],lower=rings[4];
+    rod(train,ringPoint(top,a,.10),ringPoint(lower,a,.11),.055,materials.dark);
+  }
+  // Small recessed headlights near the rounded low nose.
   for(const side of [-1,1]){
-    box(train,.31,.13,1.7,materials.orange,side*.42,1.66,anchor+sign*6.6);
-    const light=new THREE.Mesh(new THREE.SphereGeometry(.17,10,7),materials.lamp);light.scale.set(.72,.60,1.24);light.position.set(side*.32,1.83,anchor+sign*7.95);train.add(light);
+    const lamp=new THREE.Mesh(new THREE.SphereGeometry(.16,12,8),materials.lamp);
+    lamp.scale.set(1.65,.70,1.40);
+    lamp.position.set(side*.48,1.94,anchor+sign*9.4);train.add(lamp);
+    const line=box(train,.04,.035,1.5,materials.scarlet,side*.91,1.67,anchor+sign*7.65);
+    line.rotation.y=side*.14;
   }
 }
 function buildTrain(scene) {
@@ -330,10 +363,10 @@ class HighSpeedRailSimulator {
   constructor(){
     this.view=$('scene');this.audio=new SimulatedAudio();this.mode='follow';this.weather='day';
     this.direction='north';this.route='local';this.itinerary=createItinerary();
-    this.targetSpeed=260;this.speed=0;this.running=false;this.completed=false;this.dwell=0;
-    this.current=0;this.distance=0;this.announced=false;this.doorsOpen=0;
+    this.power=0;this.brake=0;this.speed=0;this.running=false;this.completed=false;this.atStation=true;this.overrun=false;this.needsNextLeg=false;
+    this.current=0;this.distance=0;this.announced=false;this.doorsOpen=1;this.doorLevel=1;
     this.movers=[];this.lastTime=performance.now();this.weatherTimer=0;
-    this.setupScene();this.bindControls();this.reset();this.animate();
+    this.setupScene();this.bindControls();this.setView('follow');this.reset();this.animate();
     window.addEventListener('resize',()=>this.resize());this.resize();
   }
   setupScene(){
@@ -345,10 +378,10 @@ class HighSpeedRailSimulator {
     this.renderer.toneMappingExposure=1.17;this.renderer.shadowMap.enabled=true;
     this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     this.view.append(this.renderer.domElement);
-    this.camera=new THREE.PerspectiveCamera(46,1,.1,1600);this.camera.position.set(29,18,111);
+    this.camera=new THREE.PerspectiveCamera(46,1,.1,1600);this.camera.position.set(23,13,-102);
     this.controls=new OrbitControls(this.camera,this.renderer.domElement);
     this.controls.enableDamping=true;this.controls.maxPolarAngle=1.50;
-    this.controls.minDistance=14;this.controls.maxDistance=220;this.controls.target.set(0,2,0);
+    this.controls.minDistance=14;this.controls.maxDistance=220;this.controls.target.set(0,2,-35);
     this.controls.enabled=false;
     this.hemi=new THREE.HemisphereLight(0xffffff,0x385849,2.12);this.scene.add(this.hemi);
     this.sun=new THREE.DirectionalLight(0xfff5df,3.0);this.sun.position.set(-85,125,-95);this.sun.castShadow=true;
@@ -368,12 +401,12 @@ class HighSpeedRailSimulator {
   reset(){
     this.audio.stopSpeech();this.destroyStations();
     this.itinerary=createItinerary(this.direction,this.route);
-    this.current=0;this.distance=0;this.speed=0;this.running=false;this.completed=false;this.dwell=0;this.announced=false;this.doorsOpen=0;
+    this.current=0;this.distance=0;this.speed=0;this.power=0;this.brake=0;this.running=false;this.completed=false;this.atStation=true;this.overrun=false;this.needsNextLeg=false;this.announced=false;this.doorsOpen=1;this.doorLevel=1;
     this.departGroup=this.createStation(this.itinerary.stops[0],0);
     this.arrivalGroup=this.createStation(this.itinerary.stops[1],-LEG_DISTANCE);
-    this.updateStatus('已準備就緒，點擊「開始行駛」');
-    $('announcementText').textContent='列車已在月台待命。請選擇方向、停靠模式，再開始行駛。';
-    $('driveBtn').textContent='▶ 開始行駛';
+    this.updateStatus('列車待命 · 關門、啟動駕駛後設定動力段位');
+    $('announcementText').textContent='手動駕駛：先關閉車門、按「啟用駕駛」，再增加動力段位。進站需要自己操作煞車。';
+    $('driveBtn').textContent='⚡ 啟用駕駛';
     $('originName').textContent=this.itinerary.stops[0].zh;
     $('destinationName').textContent=this.itinerary.stops.at(-1).zh;
     this.updateRail();this.updateUI();
@@ -393,7 +426,16 @@ class HighSpeedRailSimulator {
     document.querySelectorAll('[data-weather]').forEach(b=>b.classList.toggle('active',b.dataset.weather===weather));
     $('sceneWeatherName').textContent={day:'晴朗 · DAY',sunset:'夕陽 · SUNSET',night:'夜間 · NIGHT',rain:'下雨 · RAIN'}[weather];
   }
-  setView(mode){this.mode=mode;this.controls.enabled=mode==='free';this.controls.target.set(0,2,0);$('cameraLabel').textContent={follow:'◈ 追蹤視角',cab:'◈ 駕駛室視角',side:'◈ 月台視角',free:'◈ 自由視角'}[mode]||'◈ 鏡頭';}
+  setView(mode){
+    this.mode=mode;this.controls.enabled=mode==='free';
+    if(mode==='free'){this.camera.position.set(23,13,-102);this.controls.target.set(0,2,-35);this.controls.update();}
+    // The entire opaque carbody disappears only for the in-cab renderer.
+    // The physical exterior remains unchanged in chase/free/platform views.
+    this.train.root.visible=mode!=='cab';
+    this.view.parentElement.classList.toggle('cab-mode',mode==='cab');
+    $('cabInterior').classList.toggle('hidden',mode!=='cab');
+    $('cameraLabel').textContent={follow:'◈ 列車追蹤',cab:'◈ 駕駛室 · 真正前方視野',side:'◈ 月台側面',free:'◈ 自由旋轉'}[mode]||'◈ 鏡頭';
+  }
   bindControls(){
     document.querySelectorAll('[data-direction]').forEach(button=>button.addEventListener('click',()=>{
       this.direction=button.dataset.direction;this.reset();
@@ -404,7 +446,13 @@ class HighSpeedRailSimulator {
     }));
     document.querySelectorAll('[data-weather]').forEach(b=>b.addEventListener('click',()=>this.setWeather(b.dataset.weather)));
     $('cameraMode').addEventListener('change',e=>this.setView(e.target.value));
-    $('targetSpeed').addEventListener('input',e=>{this.targetSpeed=clampSpeed(e.target.value);$('targetSpeedText').textContent=this.targetSpeed;});
+    $('powerDown').addEventListener('click',()=>this.changePower(-1));
+    $('powerUp').addEventListener('click',()=>this.changePower(1));
+    $('brakeDown').addEventListener('click',()=>this.changeBrake(-1));
+    $('brakeUp').addEventListener('click',()=>this.changeBrake(1));
+    $('emergencyBtn').addEventListener('click',()=>this.emergencyBrake());
+    $('doorBtn').addEventListener('click',()=>this.toggleDoors());
+    $('retryBtn').addEventListener('click',()=>this.retryLeg());
     $('resetBtn').addEventListener('click',()=>this.reset());
     $('driveBtn').addEventListener('click',()=>this.toggleDrive());
     $('soundBtn').addEventListener('click',()=>{
@@ -416,17 +464,67 @@ class HighSpeedRailSimulator {
       const btn=$('voiceBtn');btn.setAttribute('aria-pressed',String(this.audio.voice));btn.textContent=this.audio.voice?'📣 廣播：開':'🔇 廣播：關';
     });
     $('pantographBtn').addEventListener('click',()=>this.audio.pantograph());
-    document.addEventListener('keydown',e=>{if(e.code==='Space'&&!['INPUT','SELECT','BUTTON'].includes(document.activeElement.tagName)){e.preventDefault();this.toggleDrive();}});
+    document.addEventListener('keydown',e=>{
+      if(e.ctrlKey||e.metaKey||e.altKey||['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;
+      const keys={KeyW:()=>this.changePower(1),ArrowUp:()=>this.changePower(1),KeyS:()=>this.changePower(-1),ArrowDown:()=>this.changePower(-1),KeyD:()=>this.changeBrake(1),ArrowRight:()=>this.changeBrake(1),KeyA:()=>this.changeBrake(-1),ArrowLeft:()=>this.changeBrake(-1),KeyE:()=>this.emergencyBrake(),KeyO:()=>this.toggleDoors(),Space:()=>this.toggleDrive()};
+      if(keys[e.code]){e.preventDefault();keys[e.code]();}
+    });
+  }
+  changePower(delta){
+    if(this.completed||this.overrun)return;
+    if(!this.running && delta>0){this.updateStatus('請先點選「啟用駕駛」');return;}
+    if(delta>0 && this.doorsOpen){this.updateStatus('車門尚未關閉！按「關閉車門」再加速');return;}
+    if(delta>0 && this.brake>0){this.updateStatus('請先解除煞車才能增加動力');return;}
+    this.power=Math.max(0,Math.min(5,this.power+delta));
+    if(this.power>0&&this.atStation){
+      if(this.needsNextLeg){this.nextLeg();this.needsNextLeg=false;}
+      else this.announce('depart',this.itinerary.stops[this.current]);
+      this.atStation=false;
+    }
+    this.updateUI();
+  }
+  changeBrake(delta){
+    if(this.completed)return;
+    this.brake=Math.max(0,Math.min(7,this.brake+delta));
+    if(this.brake>0)this.power=0;
+    this.updateUI();
+  }
+  emergencyBrake(){
+    if(this.completed)return;
+    this.power=0;this.brake=7;this.updateStatus('🚨 緊急煞車 B7！');this.updateUI();
+  }
+  toggleDoors(){
+    if(!canOperateDoors(this.speed,this.power)){this.updateStatus('⚠️ 必須完全停車並收回動力才能操作車門');return;}
+    if(!this.atStation){this.updateStatus('車門只能在正確月台開啟');return;}
+    this.doorsOpen=!this.doorsOpen;
+    if(this.doorsOpen){
+      this.power=0;
+      if(this.current>0){this.announce('arrive',this.itinerary.stops[this.current]);}
+      if(this.current===this.itinerary.stops.length-1){
+        this.completed=true;this.running=false;
+        $('announcementText').textContent=`🎉 已安全抵達${this.itinerary.stops[this.current].zh}站，旅程完成！`;
+        $('driveBtn').textContent='↺ 再次出發';this.updateStatus('🎉 全程駕駛完成');
+      }else this.updateStatus('月台停靠 · 車門已開啟');
+    }else this.updateStatus('車門已關閉 · 可解除煞車後加速');
+    this.updateUI();
   }
   toggleDrive(){
     if(this.completed){this.reset();return;}
+    if(this.overrun){this.retryLeg();return;}
     this.running=!this.running;
     if(this.running){
       this.audio.init();
-      $('driveBtn').textContent='Ⅱ 暫停模擬';
-      if(this.current===0&&this.distance===0&&this.dwell===0)this.announce('depart',this.itinerary.stops[0]);
-      this.updateStatus(this.dwell>0?'月台停靠中':'加速出站');
-    } else {$('driveBtn').textContent='▶ 繼續行駛';this.updateStatus('列車已暫停');}
+      $('driveBtn').textContent='Ⅱ 暫停駕駛';
+      this.updateStatus(this.doorsOpen?'車門開啟 · 請關門後加速':'駕駛已啟用 · W 加動力 / D 加煞車');
+    }else {this.power=0;this.brake=0;$('driveBtn').textContent='▶ 繼續駕駛';this.updateStatus('模擬已暫停');}
+    this.updateUI();
+  }
+  retryLeg(){
+    if(!this.overrun)return;
+    this.distance=0;this.speed=0;this.power=0;this.brake=0;this.overrun=false;this.announced=false;
+    this.atStation=true;this.needsNextLeg=false;this.doorsOpen=1;this.doorLevel=1;
+    this.departGroup.position.z=0;this.arrivalGroup.position.z=-LEG_DISTANCE;
+    this.updateStatus('已重試本站；請關門重新手動駕駛');this.updateUI();
   }
   announce(type,station){
     const msg=speakableAnnouncement(station,this.direction,type);
@@ -452,73 +550,79 @@ class HighSpeedRailSimulator {
   }
   updateUI(){
     $('speedReadout').textContent=String(Math.round(this.speed)).padStart(3,'0');
-    $('speedGauge').style.width=`${this.speed/3}%`;
+    $('speedGauge').style.width=`${this.speed/MAX_SPEED*100}%`;
+    $('powerValue').textContent=`P${this.power}`;
+    $('brakeValue').textContent=`B${this.brake}`;
+    $('powerUp').disabled=!this.running||this.completed||this.overrun||this.doorsOpen||this.brake>0||this.power===5;
+    $('powerDown').disabled=this.power===0;
+    $('brakeDown').disabled=this.brake===0;
+    $('brakeUp').disabled=this.brake===7||this.completed;
+    $('doorBtn').textContent=this.doorsOpen?'🚪 關閉車門':'🚪 開啟車門';
+    $('doorBtn').disabled=!canOperateDoors(this.speed,this.power)||!this.atStation;
+    $('retryBtn').classList.toggle('hidden',!this.overrun);
     const remaining=Math.max(0,LEG_DISTANCE-this.distance);
-    $('distanceRemaining').textContent=this.completed?'本次旅程已完成':this.dwell>0?'月台停靠中 · 車門開啟':`距離下一停靠站 ${Math.ceil(remaining)} 模擬單位`;
+    $('distanceRemaining').textContent=this.completed?'模擬駕駛完成':this.overrun?'列車已越站 · 請重試本站':this.atStation?'月台停靠 · 請操作車門':`下一站距離 ${Math.ceil(remaining)} 模擬單位`;
+    const recommend=estimateBrakingDistance(this.speed,this.weather==='rain');
+    const warning= !this.atStation&&!this.overrun&&this.speed>16&&remaining<=recommend+20;
+    $('brakingAlert').textContent=this.overrun?'⚠️ 越站了！點選「重試本站」':this.atStation?'請關門、解除煞車後加速':warning?'⚠️ 建議立即煞車，準備進站':`建議煞車距離：約 ${Math.ceil(recommend)} 模擬單位`;
+    $('brakingAlert').classList.toggle('warning',warning||this.overrun);
+    $('cabPowerValue').textContent=`P${this.power}`;
+    $('cabBrakeValue').textContent=`B${this.brake}`;
+    $('cabSpeedValue').textContent=String(Math.round(this.speed)).padStart(3,'0');
   }
   arrive(){
-    this.distance=LEG_DISTANCE;this.speed=0;
-    this.current+=1;this.dwell=5.2;this.announced=false;
-    this.announce('arrive',this.itinerary.stops[this.current]);this.updateRail();this.updateStatus('月台停靠中 · 車門開啟');
-    if(this.current===this.itinerary.stops.length-1){
-      this.completed=true;this.running=false;this.dwell=0;this.updateStatus('🎉 本次行程完成');
-      $('announcementText').textContent=`🎉 已抵達終點 ${this.itinerary.stops[this.current].zh} 站！感謝搭乘。`;
-      $('driveBtn').textContent='↺ 再次出發';
-    }
+    this.speed=0;this.power=0;this.brake=Math.max(3,this.brake);
+    this.current+=1;this.announced=false;this.atStation=true;this.needsNextLeg=true;
+    this.updateRail();this.updateStatus('✅ 正確停車！請手動開啟車門');
+    $('announcementText').textContent=`已停妥${this.itinerary.stops[this.current].zh}站。請按「開啟車門」完成停站。`;
   }
   nextLeg(){
     const oldDepart=this.departGroup;
     if(oldDepart){this.scene.remove(oldDepart);}
     this.departGroup=this.arrivalGroup;
     this.arrivalGroup=this.createStation(this.itinerary.stops[this.current+1],-LEG_DISTANCE);
-    this.distance=0;this.announced=false;this.dwell=0;
-    this.announce('depart',this.itinerary.stops[this.current]);this.updateStatus('列車正從月台出發');
+    this.distance=0;this.announced=false;
+    this.announce('depart',this.itinerary.stops[this.current]);this.updateStatus('已離站 · 請控制動力與煞車');
   }
   updateCamera(dt){
     if(this.mode==='free'){this.controls.update();return;}
-    const positions={follow:[35,22,111],cab:[0,4.16,-55.5],side:[25,10,25]};
-    const targets={follow:[0,2,-13],cab:[0,3,-150],side:[0,2,-18]};
+    // In-cab view deliberately hides the opaque exterior and draws a dedicated
+    // dashboard/windscreen overlay; this prevents the roof/nose clipping bug.
+    const positions={follow:[23,13,-102],cab:[-.40,3.77,-64.3],side:[24,8,-26]};
+    const targets={follow:[0,2,-35],cab:[-.4,2.8,-200],side:[0,2,-28]};
     const p=positions[this.mode]||positions.follow,look=targets[this.mode]||targets.follow;
-    const factor=1-Math.exp(-dt*3.0);
+    const factor=1-Math.exp(-dt*5);
     this.camera.position.lerp(new THREE.Vector3(...p),factor);
     this.camera.lookAt(...look);
   }
   animate(){
     requestAnimationFrame(()=>this.animate());
-    const now=performance.now();const dt=Math.min(.06,Math.max(0,(now-this.lastTime)/1000));this.lastTime=now;
-    if(this.running&&!this.completed){
-      if(this.dwell>0){
-        this.speed=0;this.dwell=Math.max(0,this.dwell-dt);
-        if(this.dwell===0)this.nextLeg();
-      }else{
-        const remaining=LEG_DISTANCE-this.distance;
-        const target=approachingSpeed(remaining,this.targetSpeed);
-        const maxDelta=(target<this.speed?140:100)*dt;
-        this.speed+=THREE.MathUtils.clamp(target-this.speed,-maxDelta,maxDelta);
-        const moved=Math.min(remaining, this.speed*.11*dt);
-        this.distance+=moved;
-        if(this.departGroup)this.departGroup.position.z=this.distance;
-        if(this.arrivalGroup)this.arrivalGroup.position.z=-LEG_DISTANCE+this.distance;
-        for(const mover of this.movers){mover.object.position.z+=moved;if(mover.object.position.z>350)mover.object.position.z-=mover.cycle;}
-        if(remaining<55&&!this.announced){this.announced=true;this.announce('approach',this.itinerary.stops[this.current+1]);}
-        if(this.distance>=LEG_DISTANCE-.01)this.arrive();
-        else if(this.speed>200)this.updateStatus('⚡ 高速行駛中');
-        else if(remaining<95)this.updateStatus('即將進站 · 減速中');
-        else this.updateStatus('行駛中 · 逐漸加速');
-        if(Math.abs(this.tunnel.position.z)<28&&this.speed>180&&this.audio.enabled&&!this.inTunnel){this.audio.pantograph();}
-        this.inTunnel=Math.abs(this.tunnel.position.z)<32;
-      }
+    const now=performance.now(),dt=Math.min(.06,Math.max(0,(now-this.lastTime)/1000));this.lastTime=now;
+    if(this.running&&!this.completed&&!this.overrun&&!this.atStation){
+      const remaining=LEG_DISTANCE-this.distance;
+      const state=stepManualDrive({speed:this.speed,distance:this.distance,power:this.power,brake:this.brake},dt,{rain:this.weather==='rain'});
+      this.speed=state.speed;this.distance=state.distance;
+      const moved=state.moved;
+      if(this.departGroup)this.departGroup.position.z=this.distance;
+      if(this.arrivalGroup)this.arrivalGroup.position.z=-LEG_DISTANCE+this.distance;
+      for(const mover of this.movers){mover.object.position.z+=moved;if(mover.object.position.z>350)mover.object.position.z-=mover.cycle;}
+      if(remaining<80&&!this.announced){this.announced=true;this.announce('approach',this.itinerary.stops[this.current+1]);}
+      if(withinStopZone(this.distance,this.speed))this.arrive();
+      else if(this.distance>LEG_DISTANCE+16){this.overrun=true;this.power=0;this.brake=7;this.updateStatus('⚠️ 越站！請重試本站');}
+      else if(this.speed>200)this.updateStatus('⚡ 高速行駛中 · 注意進站煞車');
+      else if(remaining<90)this.updateStatus('接近月台 · 請手動控制煞車');
+      else this.updateStatus(this.power>0?'手動加速中':this.brake>0?'手動煞車中':'滑行中');
+      if(Math.abs(this.tunnel.position.z)<28&&this.speed>180&&this.audio.enabled&&!this.inTunnel)this.audio.pantograph();
+      this.inTunnel=Math.abs(this.tunnel.position.z)<32;
     }
     this.audio.setSpeed(this.speed);
-    const openTarget=(this.dwell>0||this.completed)?1:0;
-    this.doorsOpen=THREE.MathUtils.damp(this.doorsOpen,openTarget,2.6,dt);
-    for(const d of this.train.doors){d.doorLeft.position.z=d.closedLeft-.40*this.doorsOpen;d.doorRight.position.z=d.closedRight+.40*this.doorsOpen;}
+    this.doorLevel=THREE.MathUtils.damp(this.doorLevel,this.doorsOpen?1:0,3.2,dt);
+    for(const d of this.train.doors){d.doorLeft.position.z=d.closedLeft-.40*this.doorLevel;d.doorRight.position.z=d.closedRight+.40*this.doorLevel;}
     if(this.speed>1)for(const w of this.train.wheels)w.rotation.x+=this.speed*.001*dt;
     if(this.weather==='rain'){
       const arr=this.rain.positions;
       for(let i=0;i<this.rain.speeds.length;i++){
-        arr[i*3+1]-=this.rain.speeds[i]*dt;
-        arr[i*3+2]+=this.speed*.037*dt;
+        arr[i*3+1]-=this.rain.speeds[i]*dt;arr[i*3+2]+=this.speed*.037*dt;
         if(arr[i*3+1]<-1){arr[i*3+1]=rnd(35,55);arr[i*3+2]=rnd(-155,120);}
         if(arr[i*3+2]>125)arr[i*3+2]=-150;
       }

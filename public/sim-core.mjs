@@ -47,3 +47,30 @@ export function speakableAnnouncement(station, direction, phase) {
   if (phase === 'depart') return `歡迎搭乘本次${directionName}高鐵模擬列車。車門即將關閉，請注意安全。`;
   throw new Error('無效廣播類型');
 }
+
+/** Manual, frame-rate-independent power/brake dynamics; distances are compressed game units. */
+export function stepManualDrive(state,seconds,{rain=false}={}) {
+  const dt=Math.max(0,Math.min(.1,Number(seconds)||0));
+  const speed=Math.max(0,Math.min(MAX_SPEED,Number(state.speed)||0));
+  const distance=Math.max(0,Number(state.distance)||0);
+  const power=Math.min(5,Math.max(0,Math.trunc(Number(state.power)||0)));
+  const brake=Math.min(7,Math.max(0,Math.trunc(Number(state.brake)||0)));
+  // Braking takes precedence. Wet rail reduces the available service deceleration.
+  const traction=brake>0?0:power*(rain?2.25:2.9)*Math.max(.4,1-speed/490);
+  const deceleration=brake*(rain?2.1:2.85);
+  const resistance=speed>0?.35+speed*.002:0;
+  const nextSpeed=Math.max(0,Math.min(MAX_SPEED,speed+(traction-deceleration-resistance)*dt));
+  const moved=(speed+nextSpeed)/2*.11*dt;
+  return {speed:nextSpeed,distance:distance+moved,moved};
+}
+export function estimateBrakingDistance(speed,rain=false) {
+  const s=Math.max(0,Math.min(MAX_SPEED,Number(speed)||0));
+  const b=rain?13:18; // approx B5, with conservative margin
+  return s*s/(2*b)*.11;
+}
+export function canOperateDoors(speed,power) {
+  return Math.abs(Number(speed)||0)<.1 && (Number(power)||0)===0;
+}
+export function withinStopZone(distance,speed) {
+  return Number(distance)>=LEG_DISTANCE-13 && Number(distance)<=LEG_DISTANCE+8 && Number(speed)<=3.2;
+}
