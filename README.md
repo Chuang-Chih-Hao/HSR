@@ -213,3 +213,28 @@ npm test
 - 新增 `public/door-700t.mjs`：依原車體截面裁切真正的 1.24 × 2.13 模擬公尺門洞，兩側橘色腰線同步斷開。門板使用相同曲面並滑入車壁，完全開啟時不殘留遮擋門洞的白色車殼。
 - 12 節列車每節現有兩側門洞背後均新增立體玄關、門檻、防滑地面、扶手、隔板、照明及通往代表性座椅區的中央通道；第 6 車使用商務色系。外部視角可直接看到這些幾何，不是圖片或透明整車。
 - 車站雙面站名牌改為正反兩個正向文字面，避免背面鏡像字。保留手動車門、停站限制與既有內裝視角。此版本只復刻門口可見區域，非全 12 車精密內裝。
+
+
+## 2026-11-24｜12 座實景參考車站（第一版）
+
+取代通用車站建築：各站以照片和建築資料中的特徵建立獨立程序化 3D 場景。照片僅用於人工建模參考，未將第三方圖片拷貝為遊戲貼圖。
+
+| 車站 | 主要建模特徵 | 實景照片 | 建築／站務參考 |
+|---|---|---|---|
+| 左營 | 地面終點站・大型弧形站棚 | [照片](https://commons.wikimedia.org/wiki/Category:Platforms_at_Zuoying_Station_%28THSR%29) | [資料](https://media.taiwan.net.tw/zh-tw/portal/travel/details/attraction_397000000a_001029) |
+| 台南 | 高架・斜屋頂與玻璃帷幕 | [照片](https://tainancity.wordpress.com/2010/06/19/tainan-high-speed-rail-station/) | [資料](https://www.taiwanglass.com/application_detail.php?id=541&langeno=tw&sid=174) |
+| 嘉義 | 高架・地景式長斜屋頂 | [照片](https://4travel.jp/travelogue/11940711) | [資料](https://apextraveller.com/xuite-377802159/) |
+| 雲林 | 高架・層疊曲線金屬屋面 | [照片](https://commons.wikimedia.org/wiki/File:At_the_Platform_of_THSR_Yunlin_Station.jpg) | [資料](https://www.krisyaoartech.com/zh-tw/projects/transportation/Yunlin-High-Speed-Rail-Station) |
+| 彰化 | 高架・花瓣柱與玻璃綠建築 | [照片](https://tourism.chcg.gov.tw/AttractionsContent.aspx?chk=9ff0790d-100d-4b00-8481-2155b5be9d65&id=319&l=JP) | [資料](https://www.twarchitect.org.tw/works/高鐵彰化站/) |
+| 台中 | 高架・大型空間桁架站棚 | [照片](https://commons.wikimedia.org/wiki/File:Roof_Structure_of_THSR_Taichung_Station.jpg) | [資料](https://travel.taichung.gov.tw/zh-tw/attractions/intro/946) |
+| 苗栗 | 高架・幾何金屬格柵 | [照片](https://commons.wikimedia.org/wiki/File:Northbound_platform_of_THSR_Miaoli_Station_01.jpg) | [資料](https://www.miaolitravel.net/article.aspx?sNo=03007113) |
+| 新竹 | 高架・雙翼曲面與露天軌道 | [照片](https://bbs.mychat.to/reads.php?tid=569605) | [資料](https://www.krisyaoartech.com/zh-tw/projects/transportation/Hsinchu-High-Speed-Rail-Station) |
+| 桃園 | 地下・採光天窗與挑空 | [照片](https://commons.wikimedia.org/wiki/Category:Platforms_at_Taoyuan_Station_%28THSR%29) | [資料](https://tlc.tyc.edu.tw/生態巡禮/中壢區：踏青查塘探高鐵/) |
+| 板橋 | 地下・弧形月台意象 | [照片](https://commons.wikimedia.org/wiki/Category:Platforms_at_Banqiao_Station_%28THSR%29) | [資料](https://www.thsrc.com.tw/ArticleContent/e6e26e66-7dc1-458f-b2f3-71ce65fdc95f) |
+| 台北 | 地下・密集柱列與長條照明 | [照片](https://commons.wikimedia.org/wiki/Category:Platforms_at_Taipei_Station_%28THSR%29) | [資料](https://www.thsrc.com.tw/ArticleContent/977abb69-413a-4ccf-a109-0272c24fd490) |
+| 南港 | 地下終點站・混凝土梁與現代頂棚 | [照片](https://commons.wikimedia.org/wiki/File:On_the_platform_at_the_THSR_Nangang_Station_ca._2024.png) | [資料](https://www.thsrc.com.tw/ArticleContent/2f940836-cedc-41ef-8e28-c2336ac8fe68) |
+
+- 8 座地面／高架站各自採不同的站棚、玻璃、柱列、桁架、植栽等；地下四站有獨立牆面、天花板、照明與進出站隧道。桃園保留採光井意象，板橋採弧形天花與月台視覺，台北密集柱列，南港混凝土梁與現代化長條照明。
+- 保留 334 模擬單位月台及 12 輛停車標記、站名提示、越站重試及手動駕駛。北上南下使用相同站體；切換站點會回收舊站模型。
+- 限制：共用直線行駛軌道和縮時距離，地面與地下高度採軌道相對座標；附加軌道、月台位置、屋頂尺寸、地上建物與曲率為照片參考近似，不是原廠施工圖、完整車站室內或精確配線。板橋真實彎道、各站完整轉乘及直達車不停站通過場景尚未實作。
+- 測試：`node --test test/station-models.test.mjs`。

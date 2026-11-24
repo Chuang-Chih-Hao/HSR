@@ -7,6 +7,8 @@ import { buildDriverInterior, buildPassengerInterior, isInteriorMode, passengerP
 
 import { DOOR_WIDTH, DOOR_BOTTOM, DOOR_TOP, doorPosition, doorOffset, skinStrip, bodySkin } from './door-700t.mjs';
 
+import { addStationArchitecture } from './station-700t.mjs';
+
 const $ = id => document.getElementById(id);
 const randomGenerator = (() => { let seed = 783021; return () => ((seed = (1664525 * seed + 1013904223) >>> 0) / 4294967296); })();
 const rnd = (a, b) => a + (b - a) * randomGenerator();
@@ -278,59 +280,32 @@ function buildTrain(scene) {
 function buildStation(station) {
   const group=new THREE.Group();group.userData.isStation=true;
   const stationTrim=new THREE.MeshStandardMaterial({color:0x23475e,roughness:.48});
-  const stationWall=new THREE.MeshStandardMaterial({color:0xc7d1d4,roughness:.6});
   const stationLight=new THREE.MeshBasicMaterial({color:0xffce68});
   const stopGreen=new THREE.MeshBasicMaterial({color:0x68e9b3});
-  const nightSign=new THREE.MeshBasicMaterial({color:0xeaf5ff});
   for(const side of [-1,1]){
     const x=side*7.1;
     box(group,7.4,.45,334,materials.concrete,x,.18,0,true);
     box(group,.24,.23,335,materials.orange,side*3.5,.45,0);
-    for(let z=-154;z<=154;z+=19){
-      cylinder(group,.14,.20,6.1,materials.steel,side*9.62,3.42,z,8);
-      box(group,7.6,.29,16,materials.roof,side*7.03,6.45,z);
-      const light=box(group,.15,.08,8.7,materials.lamp,side*6.3,6.26,z);
-      light.material=materials.lamp;
-    }
-    // Distinctive raised concourse, repeated station-name panels and yellow tactile strips.
-    box(group,4.8,8.4,48,stationWall,side*14.0,3.8,35);
-    box(group,5.3,.40,50,stationTrim,side*14,8.25,35);
-    for(let z=14;z<58;z+=5.5)box(group,.11,3.8,4.8,materials.glass,side*11.56,5.8,z);
     box(group,.43,.035,334,stationLight,side*3.85,.445,0);
     for(const z of [-135,-70,0,70,135]){
-      const label=makeSign(station.zh+'站',station.en,9);
-      label.position.set(side*8.4,4.65,z);label.rotation.y=side===1?-Math.PI/2:Math.PI/2;group.add(label);
+      const label=makeSign(station.zh+'站',station.en,5.4);
+      label.position.set(side*7.5,4.7,z);label.rotation.y=side===1?-Math.PI/2:Math.PI/2;group.add(label);
     }
-    // Stop board at the leading nose position when the train is centered.
     const stop=makeSign('12 輛 停車','STOP',3.3);stop.position.set(side*3.1,3.45,TRAIN_FRONT_Z);group.add(stop);
     box(group,.14,3.0,.14,stationTrim,side*3.1,1.5,TRAIN_FRONT_Z);
     box(group,.18,.13,.18,stopGreen,side*3.1,4.02,TRAIN_FRONT_Z);
     box(group,1.4,.055,.24,stopGreen,side*4.3,.49,TRAIN_FRONT_Z);
-    const sign = makeSign(station.zh,station.en,10.3);
-    sign.rotation.y=side===1?-Math.PI/2:Math.PI/2;
-    sign.position.set(side*5.52,4.95,-2.0);
-    group.add(sign);
-    box(group,.12,1.5,9.5,materials.glass,side*4.15,1.45,0);
-    box(group,1.1,.16,6.0,materials.steel,side*7.2,.60,8);
-    for(let z=-159;z<=159;z+=9){
-      box(group,.12,.19,.53,materials.orange,side*3.57,.53,z);
+    for(const z of [-96,-48,0,48,96]){
+      box(group,1.1,.16,4.0,materials.steel,side*7.2,.98,z);
+      box(group,.85,.55,4.0,materials.steel,side*7.62,1.26,z);
+      for(const dz of [-1.4,1.4])box(group,.14,.5,.14,materials.steel,side*7.2,.70,z+dz);
     }
   }
-  // Large front-facing entrance portals sit above the overhead line.
-  // These are gameplay wayfinding landmarks, not exact station architecture.
-  for(const z of [-163,163]){
-    for(const x of [-11.2,11.2])box(group,.70,10.8,.85,stationTrim,x,5.15,z);
-    box(group,23.0,.65,.85,stationTrim,0,10.3,z);
-    box(group,14,3.2,.25,stationTrim,0,9.85,z+.46);
-    const entrance=makeSign(station.zh+'站',station.en+'  /  HSR',12);
-    entrance.position.set(0,9.85,z+.62);group.add(entrance);
-    for(const x of [-7.6,7.6])box(group,.32,.34,.32,nightSign,x,10.1,z+.64);
-  }
-  for(const z of [-169,169]){
-    box(group,20,.45,2.8,materials.concrete,0,-.4,z);
-  }
+  addStationArchitecture(group,station,{box,rod,cylinder,makeSign});
+  group.userData.architectureMaterials.push(stationTrim,stationLight,stopGreen);
   return group;
 }
+
 function buildTerrain(scene,movers) {
   const terrainGeo=new THREE.PlaneGeometry(720,1800,35,60);
   terrainGeo.rotateX(-Math.PI/2);
@@ -525,10 +500,8 @@ class HighSpeedRailSimulator {
     this.setWeather('day');
   }
   createStation(station,position){const group=buildStation(station);group.position.z=position;this.scene.add(group);return group;}
-  destroyStations(){for(const g of [this.departGroup,this.arrivalGroup])if(g){this.scene.remove(g);g.traverse(o=>{
-    // Shared materials survive; sign textures are unique per station.
-    if(o.isMesh && o.material?.map?.isCanvasTexture)o.material.map.dispose();
-  });}this.departGroup=null;this.arrivalGroup=null;}
+  disposeStation(g){if(!g)return;this.scene.remove(g);const geometries=new Set(),maps=new Set(),signMaterials=new Set();g.traverse(o=>{if(o.isMesh){geometries.add(o.geometry);if(o.material?.map?.isCanvasTexture){maps.add(o.material.map);signMaterials.add(o.material);}}});for(const v of geometries)v.dispose();for(const v of maps)v.dispose();for(const v of signMaterials)v.dispose();for(const v of g.userData.architectureMaterials||[])v.dispose();}
+  destroyStations(){for(const g of [this.departGroup,this.arrivalGroup])this.disposeStation(g);this.departGroup=null;this.arrivalGroup=null;}
   reset(){
     this.audio.stopSpeech();this.destroyStations();
     this.itinerary=createItinerary(this.direction,this.route);
@@ -755,7 +728,7 @@ class HighSpeedRailSimulator {
   }
   nextLeg(){
     const oldDepart=this.departGroup;
-    if(oldDepart){this.scene.remove(oldDepart);}
+    if(oldDepart){this.disposeStation(oldDepart);}
     this.departGroup=this.arrivalGroup;
     this.arrivalGroup=this.createStation(this.itinerary.stops[this.current+1],-LEG_DISTANCE);
     this.distance=0;this.announced=false;
@@ -817,7 +790,7 @@ class HighSpeedRailSimulator {
     }
     // Keep generic bridge/tunnel props out of platforms; station landmarks remain visible.
     for(const mover of this.movers)if(mover.stationClearance){
-      mover.object.visible=![this.departGroup,this.arrivalGroup].some(st=>st&&Math.abs(st.position.z-mover.object.position.z)<PLATFORM_LENGTH/2+mover.stationClearance);
+      mover.object.visible=![this.departGroup,this.arrivalGroup].some(st=>st&&Math.abs(st.position.z-mover.object.position.z)<(st.userData.clearance||PLATFORM_LENGTH/2)+mover.stationClearance);
     }
     this.updateCamera(dt);this.updateUI();this.renderer.render(this.scene,this.camera);
   }
