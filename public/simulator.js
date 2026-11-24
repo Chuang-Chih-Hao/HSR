@@ -83,7 +83,7 @@ function makeCarProfile(depth) {
  */
 function buildNose(parent, isLeading, anchor) {
   const sign=isLeading?-1:1;
-  const segments=64, rings=42, verts=[],tri=[];
+  const segments=64, rings=80, verts=[],tri=[];
   const surface=(d,a,offset=0)=>noseSurfacePoint(d,a,anchor,sign,offset);
   for(let i=0;i<=rings;i++){
     const d=i/rings*NOSE_LENGTH_700T;
@@ -94,6 +94,14 @@ function buildNose(parent, isLeading, anchor) {
     const w=(i+1)*segments+j,x=(i+1)*segments+(j+1)%segments;
     // Correct opposing normal directions for the two mirrored noses.
     if(isLeading)tri.push(u,w,v,v,w,x);else tri.push(u,v,w,v,x,w);
+  }
+  // Seal the broad rounded lip with a finite end face (both mirrored normals).
+  const [, ,bottom,top]=noseSectionAt(NOSE_LENGTH_700T);
+  const cap=verts.length/3;
+  verts.push(0,(bottom+top)/2,anchor+sign*NOSE_LENGTH_700T);
+  for(let j=0;j<segments;j++){
+    const n=rings*segments+j,m=rings*segments+(j+1)%segments;
+    if(isLeading)tri.push(cap,m,n);else tri.push(cap,n,m);
   }
   const geometry=new THREE.BufferGeometry();
   geometry.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
@@ -125,9 +133,10 @@ function buildNose(parent, isLeading, anchor) {
   };
   // 700T uses a wide orange waist/sweeping cheek on BOTH sides; the white
   // central face remains visible. The two runs meet around the rounded lip.
-  patch(0,7.92,-.95,-.26,materials.orange,.022);
-  patch(0,7.92,Math.PI+.26,Math.PI+.95,materials.orange,.022);
-  patch(7.25,8.0,Math.PI-.03,Math.PI*2+.03,materials.orange,.025);
+  const upper=t=>-.12+.34*t*t,lower=t=>-.34-.46*t;
+  patch(0,8,lower,upper,materials.orange,.035);
+  patch(0,8,t=>Math.PI-upper(t),t=>Math.PI-lower(t),materials.orange,.035);
+  patch(7.0,8,Math.PI+.38,Math.PI*2-.38,materials.orange,.038);
   // Dark, low under-nose pan is distinct from the orange side cheeks.
   patch(.0,7.55,Math.PI+1.07,Math.PI*2-1.07,materials.underbody,.018);
 
@@ -135,22 +144,20 @@ function buildNose(parent, isLeading, anchor) {
     metalness:.33,clearcoat:1,side:THREE.DoubleSide});
   // Convex windshield: broad near the roof/cab and gently tapers as the
   // glass follows the sloping upper surface. It is not a black rectangular box.
-  const edge=t=>.50+.46*t*t+.06*(1-t)*(1-t);
-  patch(.35,3.17,t=>edge(t),t=>Math.PI-edge(t),glass,.030);
+  const edge=t=>.53+.21*Math.pow(2*t-1,4);
+  patch(.65,3.8,edge,t=>Math.PI-edge(t),glass,.038);
+  const glazing=new THREE.MeshPhysicalMaterial({color:0x29495f,roughness:.15,metalness:.25,clearcoat:1,side:THREE.DoubleSide});
+  const inner=t=>.67+.15*Math.pow(2*t-1,4);
+  patch(.91,2.69,inner,t=>Math.PI-inner(t),glazing,.060);
   // Tiny non-illuminated central windscreen divider and a slim wiper.
-  rod(parent,surface(.69,Math.PI/2,.048),surface(2.95,Math.PI/2,.050),.018,materials.dark);
+  for(const a of [1.14,2.0])rod(parent,surface(1.39,a,.080),surface(2.62,a+.12,.080),.016,materials.dark);
   // Four lights are small recessed pairs BELOW the windscreen, rather than
   // two spherical headlights protruding from the tip.
   for(const side of [-1,1]){
-    const a=side<0?Math.PI-1.03:1.03;
-    const housingMat=materials.dark;
-    patch(3.11,3.58,side<0?Math.PI-1.20:.83,side<0?Math.PI-.83:1.20,housingMat,.037);
-    for(const d of [3.24,3.46]){
-      const pos=surface(d,a,.073);
-      const light=new THREE.Mesh(new THREE.BoxGeometry(.22,.13,.08),materials.lamp);
-      light.position.set(...pos);light.rotation.x=sign*.30;
-      parent.add(light);
-    }
+    const a=side<0?Math.PI-1.37:.82,b=side<0?Math.PI-.82:1.37;
+    patch(3.12,3.74,a,b,materials.dark,.060);
+    const lampMat=isLeading?materials.lamp:new THREE.MeshStandardMaterial({color:0xca2424,emissive:0xa01111,emissiveIntensity:.8,side:THREE.DoubleSide});
+    patch(3.23,3.61,a+.08,b-.08,lampMat,.078);
   }
   return shell;
 }

@@ -64,3 +64,9 @@ test('full train body layout, camera and 334m platform follow the 304m dimension
   assert.doesNotMatch(sim,/\[11\.7,\.55/);
   assert.match(sim,/nose:\[16,8,-173\]/);
 });
+
+test('nose lip is sealed and both end caps use mirrored winding',()=>{
+  assert.match(sim,/const cap=verts.length\/3/);
+  assert.match(sim,/if\(isLeading\)tri.push\(cap,m,n\);else tri.push\(cap,n,m\)/);
+  assert.ok(noseSectionAt(7)[1]>=1.2,'preserve broad shoulders near the tip');
+});

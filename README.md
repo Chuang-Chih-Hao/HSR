@@ -178,3 +178,6 @@ npm test
 - [700T 正面實車照片](https://www.hochgeschwindigkeitszuege.com/taiwan/taiwan-700-foto-galerie.php)
 
 **測試：** `npm test` 或 `node --test test/simulator.test.mjs test/geometry-700t.test.mjs`。原老師房主和雙人遊戲未改動。
+### 車鼻封口及塗裝細修
+
+提高鼻端網格取樣密度至 80 段／64 邊，封閉原本未封口的最前端，修正頭尾端面法線；7 m 處保留約 2.44 m 寬的近似截面，再快速收圓。擴大橘色包覆及深色前窗曲面，使用貼合網格的前燈及紅色尾燈。上述截面控制點為依照片估算，不是原廠尺寸。
