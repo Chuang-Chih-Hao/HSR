@@ -5,6 +5,8 @@ import { create700TCarLayout, noseSurfacePoint, noseSectionAt, TRAIN_LENGTH_700T
 
 import { buildDriverInterior, buildPassengerInterior, isInteriorMode, passengerPose } from './interior-700t.mjs';
 
+import { DOOR_WIDTH, DOOR_BOTTOM, DOOR_TOP, doorPosition, doorOffset, skinStrip, bodySkin } from './door-700t.mjs';
+
 const $ = id => document.getElementById(id);
 const randomGenerator = (() => { let seed = 783021; return () => ((seed = (1664525 * seed + 1013904223) >>> 0) / 4294967296); })();
 const rnd = (a, b) => a + (b - a) * randomGenerator();
@@ -57,27 +59,74 @@ function makeSign(text, subText, w = 11) {
   c.fillStyle='#ffffff';c.font='bold 116px sans-serif';c.textAlign='center';c.fillText(text,523,140);
   c.font='48px sans-serif';c.fillStyle='#b5d2e4';c.fillText(subText.toUpperCase(),523,210);
   const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(w, w*.25),new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide}));
+  const sign=new THREE.Group(),geometry=new THREE.PlaneGeometry(w,w*.25),mat=new THREE.MeshBasicMaterial({map:texture,side:THREE.FrontSide});
+  const front=new THREE.Mesh(geometry,mat),back=new THREE.Mesh(geometry,mat);
+  front.position.z=.012;back.position.z=-.012;back.rotation.y=Math.PI;sign.add(front,back);
   return sign;
 }
 
-function makeCarProfile(depth) {
-  // Straight body has exactly the same cross-sectional boundary as nose ring 0.
-  // Matching vertex contours eliminates the seam visible on the old extruded
-  // rectangle/capsule carbody at the nose-to-cab join.
-  const vertices=[],indices=[],segments=64;
-  for(const z of [0,depth])for(let j=0;j<segments;j++){
-    const [x,y]=noseSurfacePoint(0,j/segments*Math.PI*2,0,1);
-    vertices.push(x,y,z);
+function skinGeometry(data){
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(data.vertices,3));g.setIndex(data.indices);g.computeVertexNormals();return g;
+}
+function makeCarProfile(depth,doorCenter){
+  return skinGeometry(bodySkin(depth,doorCenter));
+}
+const vestibuleMaterials={
+  wall:new THREE.MeshStandardMaterial({color:0xe4e1d6,roughness:.65,emissive:0x4a473b,emissiveIntensity:.30}),
+  floor:new THREE.MeshStandardMaterial({color:0x6b7477,roughness:.95,emissive:0x30383c,emissiveIntensity:.22}),
+  metal:new THREE.MeshStandardMaterial({color:0xb8c2c6,metalness:.38,roughness:.4}),
+  light:new THREE.MeshBasicMaterial({color:0xfff4db}),
+  standard:new THREE.MeshStandardMaterial({color:0x528a8c,roughness:.85,emissive:0x173b3e,emissiveIntensity:.25}),
+  business:new THREE.MeshStandardMaterial({color:0x82465d,roughness:.85,emissive:0x3d1828,emissiveIntensity:.25}),
+  head:new THREE.MeshStandardMaterial({color:0xf2eee3,roughness:.8})
+};
+function buildVestibule(parent,car,doorPos){
+  const g=new THREE.Group();g.name='Doorway vestibule car '+(car.index+1);g.position.z=doorPos;parent.add(g);
+  const m=vestibuleMaterials,sg=car.isRear?1:-1;
+  // Real cross-car entry passage, floor flush with doorway and no opaque wall across either opening.
+  box(g,3.30,.10,2.55,m.floor,0,DOOR_BOTTOM-.05,0);
+  box(g,2.72,.10,2.55,m.wall,0,3.39,0);
+  for(const x of [-.83,.83])box(g,.16,.035,2.25,m.light,x,3.32,0);
+  // End bulkheads flank a central passage leading toward the seating area.
+  for(const z of [-1.12,1.12]){
+    for(const side of [-1,1]){
+      box(g,1.04,2.13,.12,m.wall,side*.94,2.24,z);
+      box(g,.065,2.08,.16,m.metal,side*.42,2.23,z);
+      box(g,.07,.09,.54,m.metal,side*1.36,2.22,z*.62);
+    }
+    box(g,.86,.28,.14,m.wall,0,3.21,z);
   }
-  for(let j=0;j<segments;j++){
-    const n=j,m=(j+1)%segments,p=n+segments,q=m+segments;
-    indices.push(n,m,p,m,q,p);
+  // Closed service end and an open central entrance to the representative passenger section.
+  box(g,.88,1.95,.09,m.wall,0,2.15,-sg*1.18);
+  box(g,2.92,.10,3.4,m.floor,0,DOOR_BOTTOM-.05,sg*2.80);
+  box(g,2.72,.10,3.4,m.wall,0,3.39,sg*2.80);
+  box(g,.18,.025,3.15,m.light,0,3.32,sg*2.8);
+  for(const side of [-1,1]){
+    box(g,.075,2.12,3.4,m.wall,side*1.48,2.24,sg*2.80);
+    for(const z of [1.92,2.98,4.04]){
+      const fabric=car.index===5?m.business:m.standard;
+      for(const x of [.70,1.18]){
+        box(g,.43,.15,.48,fabric,side*x,1.68,sg*z);
+        box(g,.43,.80,.13,fabric,side*x,2.06,sg*(z+.20));
+        box(g,.34,.19,.025,m.head,side*x,2.34,sg*(z+.12));
+      }
+    }
   }
-  const g=new THREE.BufferGeometry();
-  g.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
-  g.setIndex(indices);g.computeVertexNormals();
+  box(g,2.94,2.12,.08,m.wall,0,2.24,sg*4.48);
   return g;
+}
+function makeDoorLeaf(group,side,z){
+  const leaf=new THREE.Group();leaf.position.z=z;group.add(leaf);
+  const half=DOOR_WIDTH/4;
+  const panel=(z0,z1,yMin,yMax,mat,offset)=>{
+    const obj=new THREE.Mesh(skinGeometry(skinStrip(z0,z1,{side,yMin,yMax,offset})),mat);
+    obj.material.side=THREE.DoubleSide;leaf.add(obj);
+  };
+  panel(-half,half,DOOR_BOTTOM,DOOR_TOP,materials.white,.012);
+  panel(-half,half,1.735,2.105,materials.orange,.029);
+  panel(-half,half,1.64,1.73,materials.scarlet,.032);
+  panel(-.155,.155,2.43,3.09,materials.glass,.040);
+  return leaf;
 }
 
 /** One continuous, mirrored, 8 m 700T-inspired loft per end car.
@@ -172,26 +221,31 @@ function buildTrain(scene) {
     const {index,centerZ,bodyStart,bodyEnd,bodyLength,isFront,isRear}=car;
     const group=new THREE.Group();group.name=`Car ${index+1} · ${car.length}m`;
     group.position.z=centerZ;root.add(group);
-    const body=new THREE.Mesh(makeCarProfile(bodyLength),materials.white);
+    const doorPos=doorPosition(car);
+    const body=new THREE.Mesh(makeCarProfile(bodyLength,doorPos-bodyStart),materials.white);
     body.position.z=bodyStart;body.castShadow=true;body.receiveShadow=true;group.add(body);
     const center=(bodyStart+bodyEnd)/2;
     // Continuous orange and lower grey strips stay ON the straight portion.
     for(const side of [-1,1]){
-      box(group,.028,.37,bodyLength-.12,materials.orange,side*1.699,1.92,center);
-      box(group,.031,.09,bodyLength-.12,materials.scarlet,side*1.718,1.685,center);
-      const doorPos = isFront ? bodyEnd-2.25 : isRear ? bodyStart+2.25 : bodyEnd-2.20;
+      // Both exterior paint bands also stop at the aperture.
+      for(const [z0,z1] of [[bodyStart+.06,doorPos-DOOR_WIDTH/2],[doorPos+DOOR_WIDTH/2,bodyEnd-.06]]){
+        for(const [y0,y1,mat,offset] of [[1.735,2.105,materials.orange,.020],[1.64,1.73,materials.scarlet,.023]]){
+          const strip=new THREE.Mesh(skinGeometry(skinStrip(z0,z1,{side,yMin:y0,yMax:y1,offset})),mat);group.add(strip);
+        }
+      }
       for(let z=bodyStart+1.45;z<bodyEnd-1.25;z+=2.05){
         if(Math.abs(z-doorPos)<1.42)continue;
         box(group,.035,.76,1.26,materials.glass,side*1.704,3.12,z);
         box(group,.039,.065,1.32,materials.roof,side*1.727,3.55,z);
       }
-      const doorLeft=box(group,.036,2.13,.62,materials.white,side*1.725,2.24,doorPos-.31);
-      const doorRight=box(group,.036,2.13,.62,materials.white,side*1.725,2.24,doorPos+.31);
-      box(doorLeft,.043,.66,.31,materials.glass,0,.32,.08);
-      box(doorRight,.043,.66,.31,materials.glass,0,.32,-.08);
-      doors.push({doorLeft,doorRight,closedLeft:doorLeft.position.z,closedRight:doorRight.position.z});
-      box(group,.034,.045,1.9,materials.steel,side*1.725,1.19,doorPos);
+      const doorLeft=makeDoorLeaf(group,side,doorPos-DOOR_WIDTH/4);
+      const doorRight=makeDoorLeaf(group,side,doorPos+DOOR_WIDTH/4);
+      doors.push({doorLeft,doorRight,side,closedLeft:doorLeft.position.z,closedRight:doorRight.position.z});
+      // Jambs/threshold are thin physical trim, never a solid sheet in the doorway.
+      for(const dz of [-DOOR_WIDTH/2-.035,DOOR_WIDTH/2+.035])box(group,.085,2.13,.055,vestibuleMaterials.metal,side*1.56,2.24,doorPos+dz);
+      box(group,.40,.055,DOOR_WIDTH+.15,vestibuleMaterials.metal,side*1.48,DOOR_BOTTOM-.0275,doorPos);
     }
+    buildVestibule(group,car,doorPos);
     box(group,2.75,.17,bodyLength-.35,materials.roof,0,4.56,center);
     box(group,2.5,.27,bodyLength-.38,materials.dark,0,.80,center);
     for(const wheelZ of [bodyStart+2.8,bodyEnd-2.8]){
@@ -744,7 +798,13 @@ class HighSpeedRailSimulator {
     }
     this.audio.setSpeed(this.overrun?0:this.speed);
     this.doorLevel=THREE.MathUtils.damp(this.doorLevel,this.doorsOpen?1:0,3.2,dt);
-    for(const d of this.train.doors){d.doorLeft.position.z=d.closedLeft-.40*this.doorLevel;d.doorRight.position.z=d.closedRight+.40*this.doorLevel;}
+    for(const d of this.train.doors){
+      const travel=doorOffset(this.doorLevel);
+      d.doorLeft.position.z=d.closedLeft-travel;d.doorRight.position.z=d.closedRight+travel;
+      // Leaves slide into the wall pocket rather than floating outside the train.
+      const inset=-d.side*.105*this.doorLevel;
+      d.doorLeft.position.x=inset;d.doorRight.position.x=inset;
+    }
     if(this.speed>1)for(const w of this.train.wheels)w.rotation.x+=this.speed*.001*dt;
     if(this.weather==='rain'){
       const arr=this.rain.positions;
