@@ -5,6 +5,7 @@ const http = require('http');
 const path = require('path');
 const crypto = require('crypto');
 const { Server } = require('socket.io');
+const arena = require('./battle-core');
 
 const STATIONS = ['左營', '台南', '嘉義', '雲林', '彰化', '台中', '苗栗', '新竹', '桃園', '板橋', '台北', '南港'];
 const LOCAL_MONSTERS = [
@@ -20,7 +21,7 @@ const EXPRESS_MONSTERS = [
 const rooms = new Map();
 const MAX_ROOMS = 500;
 const ROOM_TTL = 2 * 60 * 60 * 1000;
-const ACTION_INTERVAL = 500;
+const ACTION_INTERVAL = 420;
 
 function cleanName(value) {
   return typeof value === 'string' ? value.trim().replace(/[<>\u0000-\u001f]/g, '').slice(0, 14) || '小小勇者' : '小小勇者';
@@ -71,7 +72,7 @@ function publicState(room) {
     monster: room.monster ? { ...room.monster } : null,
     players: room.players.map(({ id, name, hp, maxHp, level, xp, xpNeeded, energy, coins, totalDamage }) =>
       ({ id, name, hp, maxHp, level, xp, xpNeeded, energy, coins, totalDamage })),
-    log: room.log.slice(), winner: room.phase === 'finished'
+    arena: arena.frame(room, Date.now()), log: room.log.slice(), winner: room.phase === 'finished'
   };
 }
 function makeServer() {
@@ -99,14 +100,14 @@ function makeServer() {
     }
     room.monster = { name: spec.name, emoji: spec.emoji, hp: spec.maxHp, maxHp: spec.maxHp, damage: spec.damage, boss: spec.boss };
     room.phase = room.players.length === 2 ? 'battle' : 'paused';
-    room.nextEnemyAttack = Date.now() + 4500;
+    arena.initArena(room, Date.now());
     addLog(room, `🚄 抵達 ${spec.station}！${spec.boss ? '魔王出現：' : '遇到'}${spec.name}`);
     emit(room);
   }
   function grantXp(player, amount, room) {
     player.xp += amount;
     player.coins += Math.max(3, Math.floor(amount / 2));
-    player.hp = Math.min(player.maxHp, player.hp + 8);
+    player.hp = Math.min(player.maxHp, Math.max(player.hp, player.hp<=0?Math.ceil(player.maxHp*.35):0) + 8);
     while (player.xp >= player.xpNeeded) {
       player.xp -= player.xpNeeded;
       player.level += 1;
@@ -120,6 +121,7 @@ function makeServer() {
     const spec = room.encounters[room.stage];
     room.monster.hp = 0;
     room.phase = 'transition';
+    arena.event(room,'victory',room.monster.x,room.monster.y);
     for (const player of room.players) grantXp(player, spec.xp, room);
     addLog(room, `🏆 擊敗 ${spec.name}！每人獲得 ${spec.xp} EXP`);
     room.stage += 1;
@@ -163,10 +165,11 @@ function makeServer() {
     socket.join(room.code);
     socket.data.roomCode = room.code;
     socket.data.role = 'player';
-    room.players.push(freshPlayer(socket.id, cleanName(name)));
+    const newcomer=freshPlayer(socket.id, cleanName(name));
+    arena.resetPlayer(newcomer,room.players.length);room.players.push(newcomer);
     if (room.players.length === 2 && room.phase === 'paused') {
       room.phase = 'battle';
-      room.nextEnemyAttack = Date.now() + 4500;
+      if(room.monster){room.monster.mode='chase';room.monster.zone=null;room.monster.attackAt=Date.now()+1600;}
       addLog(room, '🤝 兩位勇者就位！冒險繼續。');
     }
     emit(room);
@@ -268,31 +271,29 @@ function makeServer() {
       spawn(room);
       ack?.({ ok: true });
     }));
+    socket.on('battle:move', (payload) => withRoom(socket, null, (room, player) => {if(room.phase==='battle'&&player.hp>0)arena.input(player,payload,Date.now());},true));
     socket.on('battle:action', (payload = {}, ack) => withRoom(socket, ack, (room, player) => {
       if (room.phase !== 'battle' || !room.monster) return ack?.({ ok: false, error: '目前無法行動' });
       if (player.hp <= 0) return ack?.({ ok: false, error: '體力耗盡，等待隊友完成戰鬥' });
+      const kind = payload?.kind;
+      if(kind==='dodge'){const ok=arena.dodge(room,player,Date.now());if(ok)emit(room);return ack?.({ok,error:ok?undefined:'閃避冷卻中'});}
       if (Date.now() - player.lastAction < ACTION_INTERVAL) return ack?.({ ok: false, error: '動作冷卻中' });
-      const kind = payload.kind;
-      if (!['attack', 'skill', 'heal'].includes(kind)) return ack?.({ ok: false, error: '無效動作' });
+      if (!['attack', 'skill', 'heal', 'dodge'].includes(kind)) return ack?.({ ok: false, error: '無效動作' });
       if (kind === 'skill' && player.energy < 3) return ack?.({ ok: false, error: '能量不足，需要 3 格能量' });
       if (kind === 'heal' && player.energy < 2) return ack?.({ ok: false, error: '能量不足，需要 2 格能量' });
-      player.lastAction = Date.now();
       if (kind === 'heal') {
-        player.energy -= 2;
+        player.lastAction=Date.now();player.energy -= 2;
         const target = room.players.reduce((lowest, p) => p.hp / p.maxHp < lowest.hp / lowest.maxHp ? p : lowest);
         const amount = Math.min(target.maxHp - target.hp, 24 + player.level * 7);
         target.hp += amount;
+        arena.event(room,'heal',target.x,target.y,{amount,player:target.id});
         addLog(room, `💚 ${player.name} 為 ${target.name} 恢復 ${amount} HP`);
       } else {
-        const damage = kind === 'skill'
-          ? 32 + player.level * 9 + crypto.randomInt(5, 15)
-          : 11 + player.level * 5 + crypto.randomInt(0, 8);
-        if (kind === 'skill') player.energy -= 3;
-        else player.energy = Math.min(3, player.energy + 1);
-        const actual = Math.min(room.monster.hp, damage);
-        room.monster.hp -= actual;
-        player.totalDamage += actual;
-        addLog(room, `${kind === 'skill' ? '⚡' : '⚔️'} ${player.name} ${kind === 'skill' ? '發動必殺技' : '攻擊'}，造成 ${actual} 傷害`);
+        const hit=arena.hit(room,player,kind,Date.now());
+        if(!hit.ok)return ack?.(hit);
+        player.lastAction=Date.now();
+        if(kind==='skill')player.energy-=3;else player.energy=Math.min(3,player.energy+1);
+        addLog(room, (kind==='skill'?'⚡ ':'⚔️ ')+player.name+' 造成 '+hit.actual+' 傷害'+(hit.combo===3?' · 三連擊！':''));
       }
       if (room.monster.hp <= 0) monsterDefeated(room);
       else emit(room);
@@ -311,25 +312,19 @@ function makeServer() {
     socket.on('room:leave', (_, ack) => { leave(socket); ack?.({ ok: true }); });
     socket.on('disconnect', () => leave(socket));
   });
-  const combatTick = setInterval(() => {
-    const now = Date.now();
-    for (const [code, room] of rooms) {
-      if (now - room.touched > ROOM_TTL) { rooms.delete(code); io.to(code).emit('game:expired'); continue; }
-      if (room.phase !== 'battle' || !room.monster || now < room.nextEnemyAttack) continue;
-      room.nextEnemyAttack = now + 3900;
-      const alive = room.players.filter(p => p.hp > 0);
-      if (!alive.length) { room.phase = 'failed'; room.monster = null; emit(room); continue; }
-      const target = alive[crypto.randomInt(alive.length)];
-      const damage = Math.min(target.hp, room.monster.damage + crypto.randomInt(0, 5));
-      target.hp -= damage;
-      addLog(room, `💥 ${room.monster.name} 攻擊 ${target.name}，扣除 ${damage} HP`);
-      if (room.players.every(p => p.hp <= 0)) {
-        room.phase = 'failed';
-        addLog(room, '💔 挑戰失敗！請重新整備，再次出發。');
-      }
-      emit(room);
+  let lastTick=Date.now(),lastFrame=0;
+  const combatTick=setInterval(()=>{
+    const now=Date.now(),dt=Math.min(.1,(now-lastTick)/1000);lastTick=now;
+    const sendFrame=now-lastFrame>=90;if(sendFrame)lastFrame=now;
+    for(const [code,room] of rooms){
+      if(now-room.touched>ROOM_TTL){rooms.delete(code);io.to(code).emit('game:expired');continue;}
+      if(room.phase!=='battle'||!room.monster)continue;
+      const changed=arena.step(room,now,dt);
+      if(room.players.every(p=>p.hp<=0)){room.phase='failed';addLog(room,'💔 挑戰失敗！請重新整備。');emit(room);}
+      else if(changed)emit(room);
+      if(sendFrame)io.to(code).emit('battle:frame',arena.frame(room,now));
     }
-  }, 800);
+  },50);
   server.on('close', () => clearInterval(combatTick));
   return { app, server, io };
 }

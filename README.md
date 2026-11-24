@@ -247,3 +247,11 @@ npm test
 - 台南、嘉義以同源斜屋頂及站軌分離配置重建，加入實拍可見的圓柱、Y 型鋼構、斜玻璃／百葉、深灰金屬屋面、單側站房與空橋。雲林、彰化、新竹、苗栗強化鋼構；台中保留大跨度無月台立柱結構。地下月台改為平板吊頂及長條燈，板橋彎道仍未實作。
 - 新的照片參考：[台南月台](https://commons.wikimedia.org/wiki/File:Platform_2,_THSR_Tainan_Station_20150705.jpg)、[嘉義月台](https://www.travelking.com.tw/tourguide/scenery104456.html)、[台中建築師照片](https://www.habitech.com.tw/en/portfolio-item/taichung-station-of-taiwan-high-speed-rail/)、[雲林縣政府月台](https://www.yunlin.gov.tw/News_Content.aspx?n=1244&s=214596)、[彰化建築師照片](https://www.krisyaoartech.com/en/projects/transportation/Changhua-High-Speed-Rail-Station)、[板橋月台](https://commons.wikimedia.org/wiki/File:Platform_at_THSR_Banqiao_Station_01.jpg)、[桃園月台照片](https://commons.wikimedia.org/wiki/Category:Platforms_at_Taoyuan_Station_(THSR))。
 - 此為照片參考的遊戲模型修正，不是實景掃描；不能在未完成 WebGL 實畫面對照前宣稱精準復刻全站。
+
+
+## 即時合作戰鬥重製
+
+參考 [Minecraft Dungeons](https://www.minecraft.net/en-us/about-dungeons) 的即時合作、[Castle Crashers](https://store.steampowered.com/app/204360/) 的連擊與成長，以及 [Kirby](https://play.nintendo.com/news-tips/tips-tricks/kirby-and-forgotten-land-gameplay-tips/) 的攻擊閃避。採原創 Canvas 戰場與角色。
+- WASD／方向鍵或點擊地面移動；J 普攻（近距離、三連擊）、K 能量技能、L 補血、Space 閃避（1.5 秒冷卻、短暫無敵）。按鈕也可操作，老師只觀戰。
+- 伺服器 50ms 更新移動、怪物追擊、鎖定地面紅圈預告、範圍傷害與閃避判定，約 10Hz 廣播位置，客戶端插值。Boss 有交替震地／鎖定攻擊；攻擊後恢復期可額外造成傷害。
+- 原創角色、動態斬擊、飄字、三連擊、閃避殘影、受擊震動與補血效果；保留 4/11 關、經驗、等級、金幣與教師房主。3D 高鐵駕駛頁不變。

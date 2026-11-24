@@ -43,6 +43,7 @@ test('兩位玩家可建立房間、換路線、同步戰鬥與獲得經驗', as
     const [sa, sb] = await Promise.all([battleA, battleB]);
     assert.equal(sa.totalStages, 4);
     assert.equal(sa.monster.hp, sb.monster.hp);
+    const activeRoom=rooms.get(created.code);const attacker=activeRoom.players.find(p=>p.id===a.id);attacker.x=activeRoom.monster.x;attacker.y=activeRoom.monster.y+70;
     const hp = sa.monster.hp;
     const action = onceState(b, s => s.monster?.hp < hp);
     assert.equal((await ask(a, 'battle:action', { kind: 'attack' })).ok, true);
@@ -93,6 +94,8 @@ test('老師房主不占玩家名額，可管理路線與開局，學生不能�
     assert.equal(state.players.length, 2);
     assert.equal(state.players.some(p => p.id === teacher.id), false);
     assert.equal(state.totalStages, 4);
+    const attacker=room.players.find(p=>p.id===a.id);attacker.x=room.monster.x;attacker.y=room.monster.y+70;
+    assert.equal((await ask(teacher,'battle:action',{kind:'dodge'})).ok,false);
     const hp = state.monster.hp;
     const fought = onceState(teacher, s => s.monster?.hp < hp);
     assert.equal((await ask(a, 'battle:action', { kind: 'attack' })).ok, true);

@@ -30,7 +30,7 @@ function remember(code, role = 'player', token = '') {
   else sessionStorage.removeItem('hsr-teacher-token');
 }
 function disconnectLocal() {
-  state = null;
+  state = null;document.body.classList.remove('playing');
   sessionStorage.removeItem('hsr-room');
   sessionStorage.removeItem('hsr-role');
   sessionStorage.removeItem('hsr-teacher-token');
@@ -171,6 +171,7 @@ function renderParty() {
   $('attackBtn').disabled = !canAct;
   $('skillBtn').disabled = !canAct || energy < 3;
   $('healBtn').disabled = !canAct || energy < 2;
+  $('dodgeBtn').disabled = !canAct;
 }
 function renderLog() {
   const root = $('battleLog'); root.replaceChildren();
@@ -195,6 +196,7 @@ function renderEnd() {
 }
 function render() {
   if (!state) return;
+  document.body.classList.toggle('playing',state.phase!=='lobby');
   const lobby = state.phase === 'lobby';
   show('entryView', false); show('roomView', lobby); show('gameView', !lobby); show('intro', false);
   if (lobby) { show('endOverlay', false); renderLobby(); }
@@ -219,13 +221,14 @@ function battleAction(kind) { request('battle:action', { kind }); }
 $('attackBtn').addEventListener('click', () => battleAction('attack'));
 $('skillBtn').addEventListener('click', () => battleAction('skill'));
 $('healBtn').addEventListener('click', () => battleAction('heal'));
+$('dodgeBtn').addEventListener('click', () => battleAction('dodge'));
 document.addEventListener('keydown', e => {
   if (e.repeat || ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
-  const keyMap = { a: 'attack', s: 'skill', d: 'heal' };
+  const keyMap = { j: 'attack', k: 'skill', l: 'heal', ' ': 'dodge' };
   const kind = keyMap[e.key.toLowerCase()];
   if (kind && state?.phase === 'battle') {
-    const button = $(kind === 'attack' ? 'attackBtn' : kind === 'skill' ? 'skillBtn' : 'healBtn');
-    if (!button.disabled) battleAction(kind);
+    const button = $(kind === 'attack' ? 'attackBtn' : kind === 'skill' ? 'skillBtn' : kind === 'dodge' ? 'dodgeBtn' : 'healBtn');
+    e.preventDefault();if (!button.disabled) battleAction(kind);
   }
 });
 socket.on('connect', () => {
