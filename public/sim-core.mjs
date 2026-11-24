@@ -86,3 +86,13 @@ export function canOperateDoors(speed,power) {
 export function withinStopZone(distance,speed) {
   return Number(distance)>=LEG_DISTANCE-STOP_EARLY && Number(distance)<=LEG_DISTANCE+STOP_LATE && Number(speed)<=3.2;
 }
+
+/** Optional game-only automatic train operation. Uses the same power/brake physics. */
+export function automaticNotches(state,{rain=false}={}){
+ const remaining=LEG_DISTANCE-state.distance,speed=Math.max(0,state.speed);
+ const target=Math.min(260,Math.sqrt(Math.max(0,2*(rain?8:11)*(remaining-5)/.11)));
+ if(remaining<=5)return {power:0,brake:7,target};
+ if(speed>target+1)return {power:0,brake:Math.min(7,Math.max(2,Math.ceil((speed-target)*.65))),target};
+ if(speed<target-1)return {power:Math.min(5,Math.max(1,Math.ceil((target-speed)*.45))),brake:0,target};
+ return {power:speed<target?1:0,brake:0,target};
+}

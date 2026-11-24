@@ -55,14 +55,14 @@
 <nav class="console-tabs" role="tablist" aria-label="控制面板分頁"><button type="button" role="tab" id="tab-drive" aria-controls="panel-drive" aria-selected="true" tabindex="0" data-tab="drive">駕駛</button><button type="button" role="tab" id="tab-route" aria-controls="panel-route" aria-selected="false" tabindex="-1" data-tab="route">路線</button><button type="button" role="tab" id="tab-camera" aria-controls="panel-camera" aria-selected="false" tabindex="-1" data-tab="camera">視角</button><button type="button" role="tab" id="tab-audio" aria-controls="panel-audio" aria-selected="false" tabindex="-1" data-tab="audio">音效</button><button type="button" role="tab" id="tab-progress" hidden aria-controls="panel-progress" aria-selected="false" tabindex="-1" data-tab="progress">進度</button></nav>
 <div class="panel-slot"><div class="panel-inner">
 <section id="panel-drive" class="tab-pane is-active" role="tabpanel" aria-labelledby="tab-drive"><div class="control-card speed-card">
-    <div class="control-label"><span>05 / 手動動力與煞車</span><span class="mini-text">MANUAL DRIVE</span></div>
+    <div class="control-label"><span>05 / 駕駛模式</span><span class="mini-text" id="driveModeLabel">手動駕駛 · MANUAL</span></div><div class="button-pair drive-mode-switch" role="group" aria-label="駕駛模式"><button type="button" class="choice active" data-drive-mode="manual" aria-pressed="true">手動駕駛</button><button type="button" class="choice" data-drive-mode="auto" aria-pressed="false">自動駕駛</button></div><div class="control-label drive-notch-label"><span>動力與煞車</span><span class="mini-text">POWER / BRAKE</span></div>
     <div class="manual-control">
       <div class="notch-control"><span>🚄 動力</span><strong id="powerValue">P0</strong><div class="notch-buttons"><button id="powerDown" aria-label="減少動力段位">−</button><button id="powerUp" aria-label="增加動力段位">＋</button></div></div>
       <div class="notch-control brake"><span>🛑 煞車</span><strong id="brakeValue">B0</strong><div class="notch-buttons"><button id="brakeDown" aria-label="減少煞車段位">−</button><button id="brakeUp" aria-label="增加煞車段位">＋</button></div></div>
     </div>
     
     <p id="brakingAlert" class="braking-advice" aria-live="polite">車門開啟，等待發車</p>
-    <p class="card-note">先關門、啟用駕駛、加動力 P1–P5。進站須自行煞車 B1–B7；列車不會自動停車。</p>
+    <p class="card-note" id="modeHelp">先關門、啟用駕駛、加動力 P1–P5。進站須自行煞車 B1–B7。</p>
   </div></section>
 <section id="panel-route" class="tab-pane" role="tabpanel" aria-labelledby="tab-route" hidden><div class="control-card route-card">
     <div class="control-label"><span>01 / 行駛方向</span><span class="mini-text">DIRECTION</span></div>

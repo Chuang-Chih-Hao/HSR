@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { createItinerary, DIRECTION, ROUTE, LEG_DISTANCE, MAX_SPEED, stepManualDrive, estimateBrakingDistance, canOperateDoors, withinStopZone, speakableAnnouncement, stationApproach, TRAIN_FRONT_Z, PLATFORM_LENGTH, STOP_LATE } from './sim-core.mjs';
+import { createItinerary, DIRECTION, ROUTE, LEG_DISTANCE, MAX_SPEED, stepManualDrive, automaticNotches, estimateBrakingDistance, canOperateDoors, withinStopZone, speakableAnnouncement, stationApproach, TRAIN_FRONT_Z, PLATFORM_LENGTH, STOP_LATE } from './sim-core.mjs';
 import { create700TCarLayout, noseSurfacePoint, noseSectionAt, TRAIN_LENGTH_700T, NOSE_LENGTH_700T } from './geometry-700t.mjs';
 
 import { buildDriverInterior, buildPassengerInterior, isInteriorMode, passengerPose } from './interior-700t.mjs';
@@ -485,6 +485,7 @@ class HighSpeedRailSimulator {
   constructor(){
     this.view=$('scene');this.audio=new SimulatedAudio();this.mode='follow';this.weather='day';
     this.direction='north';this.route='local';this.itinerary=createItinerary();
+    this.driveMode='manual';this.autoStage='boarding';this.autoWait=0;
     this.power=0;this.brake=0;this.speed=0;this.running=false;this.completed=false;this.atStation=true;this.overrun=false;this.needsNextLeg=false;
     this.current=0;this.distance=0;this.announced=false;this.doorsOpen=1;this.doorLevel=1;
     this.movers=[];this.lastTime=performance.now();this.weatherTimer=0;
@@ -525,14 +526,14 @@ class HighSpeedRailSimulator {
   disposeStation(g){if(!g)return;this.scene.remove(g);const geometries=new Set(),maps=new Set(),signMaterials=new Set();g.traverse(o=>{if(o.isMesh){geometries.add(o.geometry);if(o.material?.map?.isCanvasTexture){maps.add(o.material.map);signMaterials.add(o.material);}}});for(const v of geometries)v.dispose();for(const v of maps)v.dispose();for(const v of signMaterials)v.dispose();for(const v of g.userData.architectureMaterials||[])v.dispose();}
   destroyStations(){for(const g of [this.departGroup,this.arrivalGroup])this.disposeStation(g);this.departGroup=null;this.arrivalGroup=null;}
   reset(){
-    this.audio.stopSpeech();this.destroyStations();
+    this.audio.stopSpeech();this.destroyStations();this.autoStage='boarding';this.autoWait=0;
     this.itinerary=createItinerary(this.direction,this.route);
     this.current=0;this.distance=0;this.speed=0;this.power=0;this.brake=0;this.running=false;this.completed=false;this.atStation=true;this.overrun=false;this.needsNextLeg=false;this.announced=false;this.doorsOpen=1;this.doorLevel=1;
     this.departGroup=this.createStation(this.itinerary.stops[0],0);
     this.arrivalGroup=this.createStation(this.itinerary.stops[1],-LEG_DISTANCE);
-    this.updateStatus('列車待命 · 關門、啟動駕駛後設定動力段位');
-    $('announcementText').textContent='手動駕駛：先關閉車門、按「啟用駕駛」，再增加動力段位。進站需要自己操作煞車。';
-    $('driveBtn').textContent='⚡ 啟用駕駛';
+    this.updateStatus(this.driveMode==='auto'?'自動駕駛待命 · 按開始即可乘車':'列車待命 · 關門、啟動駕駛後設定動力段位');
+    $('announcementText').textContent=this.driveMode==='auto'?'自動駕駛：列車將自行關門、發車及依路線停站。':'手動駕駛：先關閉車門、按「啟用駕駛」，再增加動力段位。進站需要自己操作煞車。';
+    this.refreshDriveMode();
     $('originName').textContent=this.itinerary.stops[0].zh;
     $('destinationName').textContent=this.itinerary.stops.at(-1).zh;
     this.updateRail();this.updateUI();
@@ -571,6 +572,7 @@ class HighSpeedRailSimulator {
   }
   walkInterior(delta){this.walk=Math.max(-8.7,Math.min(8.7,this.walk+delta));$('walkPosition').textContent=(this.walk+8.7).toFixed(1)+' m';}
   bindControls(){
+    document.querySelectorAll('[data-drive-mode]').forEach(b=>b.addEventListener('click',()=>this.setDriveMode(b.dataset.driveMode)));
     document.querySelectorAll('[data-direction]').forEach(button=>button.addEventListener('click',()=>{
       this.direction=button.dataset.direction;this.reset();
       document.querySelectorAll('[data-direction]').forEach(b=>b.classList.toggle('active',b===button));
@@ -611,7 +613,45 @@ class HighSpeedRailSimulator {
       if(keys[e.code]){e.preventDefault();keys[e.code]();}
     });
   }
+  refreshDriveMode(){
+    const auto=this.driveMode==='auto';
+    document.querySelectorAll('[data-drive-mode]').forEach(b=>{const selected=b.dataset.driveMode===this.driveMode;b.classList.toggle('active',selected);b.setAttribute('aria-pressed',String(selected));});
+    $('driveModeLabel').textContent=auto?'自動駕駛 · AUTO':'手動駕駛 · MANUAL';
+    $('modeHelp').textContent=auto?'自動控制動力、煞車及停站。緊急煞車可立即切回手動。':'先關門、啟用駕駛、加動力 P1–P5。進站須自行煞車 B1–B7。';
+    $('driveBtn').textContent=this.completed?'↺ 再次出發':this.overrun?'↺ 重試本站':this.running?'Ⅱ 暫停駕駛':auto?'▶ 開始／繼續自動駕駛':'⚡ 啟用／繼續手動駕駛';
+  }
+  setDriveMode(mode){
+    if(!['manual','auto'].includes(mode)||mode===this.driveMode)return;
+    this.driveMode=mode;this.autoStage='boarding';this.autoWait=0;
+    this.power=0;
+    this.updateStatus(mode==='auto'?'已切換自動駕駛':'已切換手動駕駛 · 請操作動力與煞車');
+    this.refreshDriveMode();this.updateUI();
+  }
+  advanceAuto(dt){
+    if(!this.running||this.completed||this.overrun||this.driveMode!=='auto')return;
+    if(this.atStation){
+      this.power=0;this.brake=3;
+      if(this.autoStage==='boarding'){
+        if(!this.doorsOpen){this.toggleDoors(true);if(this.completed)return;}
+        this.updateStatus('自動駕駛 · 月台停靠中');
+        if(this.doorLevel>.97)this.autoWait+=dt;
+        if(this.autoWait>=4){this.toggleDoors(true);this.autoStage='closing';}
+      }else if(this.autoStage==='closing'){
+        this.updateStatus('自動駕駛 · 正在關門');
+        if(!this.doorsOpen&&this.doorLevel<.02){
+          this.brake=0;this.power=5;
+          if(this.needsNextLeg){this.nextLeg();this.needsNextLeg=false;}
+          else this.announce('depart',this.itinerary.stops[this.current]);
+          this.atStation=false;this.autoStage='running';
+        }
+      }
+    }else{
+      const n=automaticNotches(this,{rain:this.weather==='rain'});
+      this.power=n.power;this.brake=n.brake;this.autoStage='running';
+    }
+  }
   changePower(delta){
+    if(this.driveMode==='auto')return;
     if(this.completed||this.overrun)return;
     if(!this.running && delta>0){this.updateStatus('請先點選「啟用駕駛」');return;}
     if(delta>0 && this.doorsOpen){this.updateStatus('車門尚未關閉！按「關閉車門」再加速');return;}
@@ -625,6 +665,7 @@ class HighSpeedRailSimulator {
     this.updateUI();
   }
   changeBrake(delta){
+    if(this.driveMode==='auto')return;
     if(this.completed)return;
     this.brake=Math.max(0,Math.min(7,this.brake+delta));
     if(this.brake>0)this.power=0;
@@ -632,9 +673,11 @@ class HighSpeedRailSimulator {
   }
   emergencyBrake(){
     if(this.completed)return;
+    if(this.driveMode==='auto')this.setDriveMode('manual');
     this.power=0;this.brake=7;this.updateStatus('🚨 緊急煞車 B7！');this.updateUI();
   }
-  toggleDoors(){
+  toggleDoors(automatic=false){
+    if(this.driveMode==='auto'&&!automatic)return;
     if(!canOperateDoors(this.speed,this.power)){this.updateStatus('⚠️ 必須完全停車並收回動力才能操作車門');return;}
     if(!this.atStation){this.updateStatus('車門只能在正確月台開啟');return;}
     this.doorsOpen=!this.doorsOpen;
@@ -656,16 +699,16 @@ class HighSpeedRailSimulator {
     if(this.running){
       this.audio.init();
       $('driveBtn').textContent='Ⅱ 暫停駕駛';
-      this.updateStatus(this.doorsOpen?'車門開啟 · 請關門後加速':'駕駛已啟用 · W 加動力 / D 加煞車');
+      this.updateStatus(this.driveMode==='auto'?'自動駕駛已啟用':this.doorsOpen?'車門開啟 · 請關門後加速':'駕駛已啟用 · W 加動力 / D 加煞車');
     }else {this.power=0;this.brake=0;$('driveBtn').textContent='▶ 繼續駕駛';this.updateStatus('模擬已暫停');}
-    this.updateUI();
+    this.refreshDriveMode();this.updateUI();
   }
   retryLeg(){
     if(!this.overrun)return;
     this.distance=0;this.speed=0;this.power=0;this.brake=0;this.overrun=false;this.announced=false;
     this.atStation=true;this.needsNextLeg=false;this.doorsOpen=1;this.doorLevel=1;
     this.departGroup.position.z=0;this.arrivalGroup.position.z=-LEG_DISTANCE;
-    this.updateStatus('已重試本站；請關門重新手動駕駛');this.updateUI();
+    this.autoStage='boarding';this.autoWait=0;this.updateStatus(this.driveMode==='auto'?'已重試本站 · 自動駕駛待命':'已重試本站；請關門重新手動駕駛');this.refreshDriveMode();this.updateUI();
   }
   announce(type,station){
     const msg=speakableAnnouncement(station,this.direction,type);
@@ -699,7 +742,7 @@ class HighSpeedRailSimulator {
     $('stationHudName').textContent=station.zh+'站';
     $('stationHudLabel').textContent=({cruise:'下一停靠站',approach:'即將進站 · 準備煞車',platform:'已進入月台 · 對準停車標記',stop:'停車區 · 將速度降至 0',overrun:'已越過停車區',arrived:this.completed?'終點抵達':'目前停靠站'})[phase];
     $('stationHudDistance').textContent=phase==='arrived'?'已停靠':phase==='overrun'?'越過 '+Math.ceil(Math.abs(state.remaining))+' 單位':state.remaining<0?'超前 '+Math.ceil(-state.remaining)+' 單位':'距停車點 '+Math.ceil(state.remaining)+' 單位';
-    $('stationHudAdvice').textContent=phase==='arrived'?'開關車門後手動發車':phase==='overrun'?'請重試本站':state.brakeNow?'⚠ 立即煞車！':'建議煞車距離 '+Math.ceil(state.braking)+' 單位';
+    $('stationHudAdvice').textContent=phase==='arrived'?(this.driveMode==='auto'?'自動停靠／發車':'開關車門後手動發車'):phase==='overrun'?'請重試本站':state.brakeNow?(this.driveMode==='auto'?'自動減速控制':'⚠ 立即煞車！'):'建議煞車距離 '+Math.ceil(state.braking)+' 單位';
     $('stationHudProgress').style.width=(phase==='arrived'?100:Math.round(state.progress*100))+'%';
     overlay.classList.toggle('hidden',!this.overrun);
     if(this.overrun){
@@ -724,18 +767,19 @@ class HighSpeedRailSimulator {
     $('speedGauge').style.width=`${this.speed/MAX_SPEED*100}%`;
     $('powerValue').textContent=`P${this.power}`;
     $('brakeValue').textContent=`B${this.brake}`;
-    $('powerUp').disabled=!this.running||this.completed||this.overrun||this.doorsOpen||this.brake>0||this.power===5;
-    $('powerDown').disabled=this.power===0;
-    $('brakeDown').disabled=this.brake===0;
-    $('brakeUp').disabled=this.brake===7||this.completed;
+    const auto=this.driveMode==='auto';
+    $('powerUp').disabled=auto||!this.running||this.completed||this.overrun||this.doorsOpen||this.brake>0||this.power===5;
+    $('powerDown').disabled=auto||this.power===0;
+    $('brakeDown').disabled=auto||this.brake===0;
+    $('brakeUp').disabled=auto||this.brake===7||this.completed;
     $('doorBtn').textContent=this.doorsOpen?'🚪 關閉車門':'🚪 開啟車門';
-    $('doorBtn').disabled=!canOperateDoors(this.speed,this.power)||!this.atStation;
+    $('doorBtn').disabled=auto||!canOperateDoors(this.speed,this.power)||!this.atStation;
     $('retryBtn').classList.toggle('hidden',!this.overrun);
     const remaining=Math.max(0,LEG_DISTANCE-this.distance);
-    $('distanceRemaining').textContent=this.completed?'模擬駕駛完成':this.overrun?'列車已越站 · 請重試本站':this.atStation?'月台停靠 · 請操作車門':`下一站距離 ${Math.ceil(remaining)} 模擬單位`;
+    $('distanceRemaining').textContent=this.completed?'模擬駕駛完成':this.overrun?'列車已越站 · 請重試本站':this.atStation?(auto?'自動停靠 · 車門控制中':'月台停靠 · 請操作車門'):`下一站距離 ${Math.ceil(remaining)} 模擬單位`;
     const recommend=estimateBrakingDistance(this.speed,this.weather==='rain');
     const warning= !this.atStation&&!this.overrun&&this.speed>16&&remaining<=recommend+20;
-    $('brakingAlert').textContent=this.overrun?'⚠️ 越站了！點選「重試本站」':this.atStation?'請關門、解除煞車後加速':warning?'⚠️ 建議立即煞車，準備進站':`建議煞車距離：約 ${Math.ceil(recommend)} 模擬單位`;
+    $('brakingAlert').textContent=this.overrun?'⚠️ 越站了！點選「重試本站」':this.atStation?(auto?'自動停靠／發車':'請關門、解除煞車後加速'):warning?(auto?'自動煞車控制中':'⚠️ 建議立即煞車，準備進站'):`建議煞車距離：約 ${Math.ceil(recommend)} 模擬單位`;
     $('brakingAlert').classList.toggle('warning',warning||this.overrun);
     if(this.mode==='cab')this.cab3D.update(this.speed,this.power,this.brake,this.doorsOpen);
     $('cabPowerValue').textContent=`P${this.power}`;
@@ -745,8 +789,8 @@ class HighSpeedRailSimulator {
   arrive(){
     this.speed=0;this.power=0;this.brake=Math.max(3,this.brake);
     this.current+=1;this.announced=false;this.atStation=true;this.needsNextLeg=true;
-    this.updateRail();this.updateStatus('✅ 正確停車！請手動開啟車門');
-    $('announcementText').textContent=`已停妥${this.itinerary.stops[this.current].zh}站。請按「開啟車門」完成停站。`;
+    this.autoStage='boarding';this.autoWait=0;this.updateRail();this.updateStatus(this.driveMode==='auto'?'✅ 自動停妥 · 準備開門':'✅ 正確停車！請手動開啟車門');
+    $('announcementText').textContent=`已停妥${this.itinerary.stops[this.current].zh}站。${this.driveMode==='auto'?'即將自動開門。':'請按「開啟車門」完成停站。'}`;
   }
   nextLeg(){
     const oldDepart=this.departGroup;
@@ -772,6 +816,7 @@ class HighSpeedRailSimulator {
   animate(){
     requestAnimationFrame(()=>this.animate());
     const now=performance.now(),dt=Math.min(.06,Math.max(0,(now-this.lastTime)/1000));this.lastTime=now;
+    this.advanceAuto(dt);
     if(this.running&&!this.completed&&!this.overrun&&!this.atStation){
       const remaining=LEG_DISTANCE-this.distance;
       const state=stepManualDrive({speed:this.speed,distance:this.distance,power:this.power,brake:this.brake},dt,{rain:this.weather==='rain'});
@@ -784,6 +829,7 @@ class HighSpeedRailSimulator {
       if(approach.phase!=='cruise'&&!this.announced){this.announced=true;this.announce('approach',this.itinerary.stops[this.current+1]);}
       if(withinStopZone(this.distance,this.speed))this.arrive();
       else if(this.distance>LEG_DISTANCE+STOP_LATE){this.failStop();}
+      else if(this.driveMode==='auto')this.updateStatus(this.brake>0?'自動駕駛 · 減速進站':this.power>0?'自動駕駛 · 加速行駛':'自動駕駛 · 滑行');
       else if(this.speed>200)this.updateStatus('⚡ 高速行駛中 · 注意進站煞車');
       else if(approach.phase==='platform'||approach.phase==='stop')this.updateStatus('月台停車區 · 對準 12 輛停車標記');
       else if(approach.phase==='approach')this.updateStatus('即將進站 · 請手動控制煞車');
