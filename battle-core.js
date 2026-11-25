@@ -3,7 +3,24 @@ const W=900,H=480, RANGE=100, SKILL_RANGE=185;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 function position(p,x,y){p.x=clamp(x,42,W-42);p.y=clamp(y,75,H-38);}
 function resetPlayer(p,i){Object.assign(p,{x:330+i*240,y:355,dx:0,dy:0,inputAt:0,goal:null,dodgeUntil:0,dodgeReady:0,combo:0,comboAt:0,face:i? -1:1});}
-function initArena(room,now){room.players.forEach((p,i)=>{resetPlayer(p,i);p.role=p.role||(i===0?'guard':'support');p.shieldUntil=0;});Object.assign(room.monster,{x:450,y:168,mode:'chase',attackAt:now+2200,zone:null,pattern:0,phase2:false,shield:false,shieldHits:0,lastAttacker:null,style:room.monster.boss?'boss':room.stage%3===0?'charge':room.stage%3===1?'ranged':'melee'});room.arenaEvents=[];room.eventSeq=room.eventSeq||0;}
+function initArena(room,now){room.players.forEach((p,i)=>{resetPlayer(p,i);p.role=p.role||(room.players.some(q=>q!==p&&q.role==='guard')?'support':room.players.some(q=>q!==p&&q.role==='support')?'guard':i===0?'guard':'support');p.shieldUntil=0;});Object.assign(room.monster,{x:450,y:168,mode:'chase',attackAt:now+2200,zone:null,pattern:0,phase2:false,shield:false,shieldHits:0,lastAttacker:null,style:room.monster.boss?'boss':room.stage%3===0?'charge':room.stage%3===1?'ranged':'melee'});room.arenaEvents=[];room.eventSeq=room.eventSeq||0;room.objective=createObjective(room.stage,room.wave||1);}
+function createObjective(stage,wave=1){
+ if((stage+wave)%3===0)return {kind:'switch',points:[{x:165,y:165},{x:735,y:365}],done:false,held:0};
+ return {kind:'supplies',points:[{x:130,y:155,type:'energy',taken:false},{x:765,y:160,type:'heal',taken:false},{x:450,y:415,type:'energy',taken:false}],done:false};
+}
+function stepObjective(room,now,dt){
+ const o=room.objective;if(!o||o.done)return false;const alive=room.players.filter(p=>p.hp>0);let changed=false;
+ if(o.kind==='switch'){
+   const a=alive.find(p=>dist(p,o.points[0])<45),b=alive.find(p=>dist(p,o.points[1])<45);
+   o.held=a&&b&&a!==b?Math.min(1.2,o.held+dt):0;
+   if(o.held>=1.2){o.done=true;for(const p of alive){p.energy=Math.min(3,(p.energy||0)+2);p.shieldUntil=now+5000;}event(room,'switch',450,235);changed=true;}
+ }else{
+  for(const item of o.points){if(item.taken)continue;const p=alive.find(p=>dist(p,item)<29);if(!p)continue;
+    item.taken=true; if(item.type==='heal'){const amount=Math.min(22,p.maxHp-p.hp);p.hp+=amount;event(room,'heal',p.x,p.y,{amount,player:p.id});}
+    else{p.energy=Math.min(3,(p.energy||0)+1);event(room,'pickup',p.x,p.y,{player:p.id});}changed=true;
+  }o.done=o.points.every(p=>p.taken);
+ }return changed;
+}
 function event(room,type,x,y,extra={}){const e={id:++room.eventSeq,type,x,y,...extra};room.arenaEvents.push(e);room.arenaEvents=room.arenaEvents.slice(-24);return e;}
 function input(p,payload,now){if(!payload||typeof payload!=='object')return false;
  if(payload.target&&Number.isFinite(payload.target.x)&&Number.isFinite(payload.target.y)){p.goal={x:clamp(payload.target.x,42,W-42),y:clamp(payload.target.y,75,H-38)};p.dx=p.dy=0;}
@@ -16,7 +33,7 @@ function zoneContains(p,z){if(z.shape!=='line')return dist(p,z)<=z.r+13;const dx
 function step(room,now,dt){const m=room.monster,alive=room.players.filter(p=>p.hp>0);if(!m||!alive.length)return false;
  for(const p of alive){let x=p.dx||0,y=p.dy||0;if(p.goal){x=p.goal.x-p.x;y=p.goal.y-p.y;const n=Math.hypot(x,y);if(n<5){p.goal=null;x=y=0;}else{const scale=Math.min(1,n/(230*Math.max(dt,.001)));x=x/n*scale;y=y/n*scale;}}else if(now-p.inputAt>300){x=y=0;}
  if(Math.abs(x)>.01)p.face=Math.sign(x);position(p,p.x+x*230*dt,p.y+y*230*dt);}
- let changed=false;
+ let changed=stepObjective(room,now,dt);
  if(m.mode==='windup'&&now>=m.attackAt){
   for(const p of alive){if(zoneContains(p,m.zone)&&now>=p.dodgeUntil){const damage=Math.min(p.hp,Math.max(1,Math.round((m.damage+(m.boss?5:0))*(now<(p.shieldUntil||0)?.40:1))));p.hp-=damage;p.combo=0;event(room,'hurt',p.x,p.y,{amount:damage,player:p.id});changed=true;}else if(zoneContains(p,m.zone)){event(room,'evade',p.x,p.y,{player:p.id});}}
   if(m.zone.shape==='line')position(m,m.zone.tx,m.zone.ty);event(room,'impact',m.zone.x,m.zone.y,{r:m.zone.r});m.zone=null;m.mode='recover';m.attackAt=now+(m.phase2?650:950);
@@ -39,12 +56,13 @@ function hit(room,p,kind,now){
  if(m.shield&&alternating){m.shieldHits--;if(m.shieldHits<=0){m.shield=false;event(room,'break',m.x,m.y);}}
  const actual=Math.min(m.hp,Math.max(1,Math.round(damage*(m.mode==='recover'?1.25:1)*(m.shield?.28:1)*(alternating?1.18:1)*(p.role==='guard'?1.12:1))));
  m.lastAttacker=p.id;m.lastHitAt=now;m.hp-=actual;p.totalDamage+=actual;
+ if(combo===3&&!m.boss&&m.mode!=='windup'){const dx=m.x-p.x,dy=m.y-p.y,n=Math.hypot(dx,dy)||1;position(m,m.x+dx/n*22,m.y+dy/n*22);}
  if(kind==='skill'&&p.role==='support'){for(const q of room.players)if(dist(p,q)<260)q.shieldUntil=now+4000;event(room,'shield',p.x,p.y,{player:p.id});}
  if(m.boss&&!m.phase2&&m.hp>0&&m.hp<=m.maxHp*.55){m.phase2=true;m.shield=true;m.shieldHits=3;event(room,'phase2',m.x,m.y);}
  event(room,kind,p.x,p.y,{tx:m.x,ty:m.y,amount:actual,combo,player:p.id,critical:m.mode==='recover'});
  return {ok:true,actual,combo};
 }
-function frame(room,now){const m=room.monster;return {code:room.code,phase:room.phase,stage:room.stage,now,players:room.players.map(p=>({id:p.id,name:p.name,x:p.x,y:p.y,hp:p.hp,maxHp:p.maxHp,level:p.level,face:p.face,combo:p.combo,role:p.role,shieldUntil:p.shieldUntil,dodgeUntil:p.dodgeUntil,dodgeReady:p.dodgeReady})),monster:m?{name:m.name,emoji:m.emoji,x:m.x,y:m.y,hp:m.hp,maxHp:m.maxHp,boss:m.boss,mode:m.mode,zone:m.zone,style:m.style,phase2:m.phase2,shield:m.shield,shieldHits:m.shieldHits}:null,events:room.arenaEvents||[]};}
+function frame(room,now){const m=room.monster;return {code:room.code,phase:room.phase,stage:room.stage,wave:room.wave||1,totalWaves:room.totalWaves||1,objective:room.objective||null,now,players:room.players.map(p=>({id:p.id,name:p.name,x:p.x,y:p.y,hp:p.hp,maxHp:p.maxHp,level:p.level,face:p.face,combo:p.combo,role:p.role,shieldUntil:p.shieldUntil,dodgeUntil:p.dodgeUntil,dodgeReady:p.dodgeReady})),monster:m?{name:m.name,emoji:m.emoji,x:m.x,y:m.y,hp:m.hp,maxHp:m.maxHp,boss:m.boss,mode:m.mode,zone:m.zone,style:m.style,phase2:m.phase2,shield:m.shield,shieldHits:m.shieldHits}:null,events:room.arenaEvents||[]};}
 const REWARDS=Object.freeze(['power','heart','charge']);
 function applyReward(p,choice){if(!REWARDS.includes(choice))return false;if(choice==='power')p.attackBonus=(p.attackBonus||0)+4;else if(choice==='heart'){p.maxHp+=14;p.hp=Math.min(p.maxHp,p.hp+26);}else{p.energy=Math.min(3,(p.energy||0)+2);p.hp=Math.min(p.maxHp,p.hp+12);}return true;}
-module.exports={W,H,RANGE,SKILL_RANGE,resetPlayer,initArena,event,input,dodge,step,hit,frame,dist,zoneContains,applyReward,REWARDS};
+module.exports={W,H,RANGE,SKILL_RANGE,resetPlayer,initArena,event,input,dodge,step,hit,frame,dist,zoneContains,applyReward,REWARDS,createObjective,stepObjective};

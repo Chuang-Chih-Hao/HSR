@@ -57,7 +57,7 @@ test('leading and trailing nose geometry have matching longitudinal symmetry',()
 });
 test('full train body layout, camera and 334m platform follow the 304m dimensions',()=>{
   assert.match(sim,/create700TCarLayout\(\)/);
-  assert.match(sim,/new THREE\.Mesh\(makeCarProfile\(bodyLength\)/);
+  assert.match(sim,/new THREE\.Mesh\(makeCarProfile\(bodyLength,doorPos-bodyStart\)/);
   assert.match(sim,/buildNose\(group,isFront,car\.noseAnchor\)/);
   assert.match(sim,/box\(group,PLATFORM_WIDTH,\.76,334,materials\.concrete/);
   assert.doesNotMatch(sim,/buildNose\(root,true,-89\.7\)/);

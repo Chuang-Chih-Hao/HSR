@@ -7,7 +7,7 @@
  function tone(type){if(!sound||sound.state!=='running')return;try{const n=sound.currentTime,o=sound.createOscillator(),g=sound.createGain(),f={attack:480,skill:840,hurt:170,dodge:630,heal:720,impact:105,victory:980,warning:250}[type];if(!f)return;o.type=type==='hurt'||type==='impact'?'triangle':'sine';o.frequency.setValueAtTime(f,n);o.frequency.exponentialRampToValueAtTime(Math.max(60,f*(type==='heal'?1.4:.55)),n+.12);g.gain.setValueAtTime(.045,n);g.gain.exponentialRampToValueAtTime(.0001,n+.16);o.connect(g);g.connect(sound.destination);o.start();o.stop(n+.18);}catch{}}
  const keys=new Set(),controlKeys=new Set(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright']);
  function accept(f){
-  if(!f)return;const tag=f.code+'/'+f.stage;if(tag!==lastStage){lastStage=tag;seen.clear();fx=[];smooth.clear();}
+  if(!f)return;const tag=f.code+'/'+f.stage+'/'+f.wave;if(tag!==lastStage){lastStage=tag;seen.clear();fx=[];smooth.clear();}
   snap=f;arrival=performance.now();
   for(const e of f.events||[])if(!seen.has(e.id)){seen.add(e.id);fx.push({...e,born:arrival});if(e.player===socket.id||['warning','impact','victory'].includes(e.type))tone(e.type);if(e.type==='hurt'||e.type==='skill'||e.type==='impact')shake=e.type==='skill'?6:3;}
   if(seen.size>500)seen=new Set((f.events||[]).map(e=>e.id));
@@ -26,13 +26,19 @@
  function hp(x,y,w,v,max){rect(x-w/2,y,w,8,4,'#172234');rect(x-w/2,y,w*Math.max(0,v/max),8,4,v/max<.3?'#ff7b82':'#79e8a8');}
  function pos(key,p){let a=smooth.get(key);if(!a){a={x:p.x,y:p.y};smooth.set(key,a);}a.x+=(p.x-a.x)*.36;a.y+=(p.y-a.y)*.36;return a;}
  function background(){
-  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#233f50');g.addColorStop(1,'#526771');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  const theme=[['#233f50','#526771'],['#284d40','#597866'],['#38304e','#6b607c'],['#514032','#88705a']][(snap.stage||0)%4];
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,theme[0]);g.addColorStop(1,theme[1]);ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
   ctx.fillStyle='#162a3b';ctx.fillRect(0,0,W,66);ctx.fillStyle='#273e4e';ctx.fillRect(0,12,W,8);
   for(let x=-40;x<W;x+=105){rect(x,25,91,31,5,'#a7c3ce');rect(x+6,29,77,18,4,'#315a70');}
   ctx.fillStyle='#ed9c52';ctx.fillRect(0,58,W,6);
   ctx.strokeStyle='#a1bbc01b';ctx.lineWidth=1;for(let x=0;x<W;x+=48){ctx.beginPath();ctx.moveTo(x,68);ctx.lineTo(x,H);ctx.stroke();}for(let y=90;y<H;y+=42){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
   ctx.strokeStyle='#f0ce73';ctx.lineWidth=3;ctx.setLineDash([12,8]);ctx.strokeRect(18,77,W-36,H-91);ctx.setLineDash([]);
   for(const x of [24,876])for(const y of [125,280,430]){rect(x-9,y-14,18,28,4,'#293f4b');rect(x-5,y-10,10,6,2,'#a8d7df');}
+ }
+ function objectives(o,now){if(!o||o.done)return;
+  if(o.kind==='switch'){for(const [i,p] of o.points.entries()){ellipse(p.x,p.y,40,40,'#4dd9d544');ctx.strokeStyle='#90f8e0';ctx.lineWidth=3;ctx.beginPath();ctx.arc(p.x,p.y,40,0,7);ctx.stroke();text('機關 '+(i+1),p.x,p.y+5,15,'#c6fff1');}
+    text('兩人分站機關 '+Math.round((o.held||0)/1.2*100)+'%',450,89,14,'#c6fff1');
+  }else for(const p of o.points){if(p.taken)continue;const dy=Math.sin(now/160)*4;ellipse(p.x,p.y+9,17,7,'#12202d88');rect(p.x-13,p.y-14+dy,26,26,7,p.type==='heal'?'#6bdba4':'#e5b85b');text(p.type==='heal'?'+':'⚡',p.x,p.y+6+dy,20,'#18322b');}
  }
  function player(p,i,now){const a=pos(p.id,p),x=a.x,y=a.y,col=i?'#f3ae58':'#4cdbe5',me=p.id===socket.id;
   ellipse(x,y+5,25,10,'#0005');if(me){ctx.strokeStyle='#f4fffc';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(x,y+4,29,13,0,0,7);ctx.stroke();}
@@ -55,14 +61,15 @@
  else if(e.type==='impact'){ctx.strokeStyle='#ffc08c';ctx.lineWidth=8;ctx.beginPath();ctx.arc(e.x,e.y,(e.r||80)*Math.min(1,t*4),0,7);ctx.stroke();}
  else if(e.type==='dodge'){ctx.strokeStyle='#9cecff';ctx.lineWidth=9*(1-t);ctx.beginPath();ctx.moveTo(e.ox,e.oy);ctx.lineTo(e.x,e.y);ctx.stroke();text('閃避',e.x,e.y-45-t*20,16,'#b5f5ff');}
  else if(e.type==='hurt'||e.type==='heal'||e.type==='evade'){text(e.type==='evade'?'成功閃避':(e.type==='heal'?'+':'−')+e.amount,e.x,e.y-38-t*44,21,e.type==='hurt'?'#ff8995':'#9dffc9');}
+ else if(e.type==='pickup'||e.type==='switch'){text(e.type==='switch'?'合作機關完成！雙人護盾':'能量 +1',e.x,e.y-35-t*28,22,'#afffe1');}
  else if(['phase2','break','shield'].includes(e.type)){text(e.type==='phase2'?'第二階段！交替攻擊破盾':e.type==='break'?'護盾破壞！':'隊伍護盾',e.x,e.y-65-t*25,23,'#a4efff');}
  else if(e.type==='victory'){text('擊敗怪物！',450,190,44,'#ffe29a');}
  ctx.restore();}}
  function loop(now){requestAnimationFrame(loop);if(!state||state.phase==='lobby'||!snap)return;
   ctx.save();if(shake>.2){ctx.translate(Math.sin(now*.1)*shake,Math.cos(now*.15)*shake);shake*=.82;}
-  background();const m=snap.monster;if(m?.zone)zone(m.zone,now);
+  background();objectives(snap.objective,now);const m=snap.monster;if(m?.zone)zone(m.zone,now);
   const actors=snap.players.filter(p=>Number.isFinite(p.x)).map((p,i)=>({y:p.y,draw:()=>player(p,i,now)}));if(m&&Number.isFinite(m.x)&&m.hp>0)actors.push({y:m.y,draw:()=>monster(m,now)});actors.sort((a,b)=>a.y-b.y).forEach(a=>a.draw());effects(now);
-  if(snap.phase==='paused'||snap.phase==='transition'||snap.phase==='reward'){rect(250,192,400,65,14,'#102337e8');text(snap.phase==='paused'?'等待隊友加入':snap.phase==='reward'?'勝利！選擇車站補給':'勝利！前往下一站',450,231,26,'#ffe5a6');}
+  if(snap.phase==='paused'||snap.phase==='transition'||snap.phase==='reward'){rect(250,192,400,65,14,'#102337e8');text(snap.phase==='paused'?'等待隊友加入':snap.phase==='reward'?'勝利！選擇車站補給':snap.wave>1&&snap.monster?.hp===0?'增援即將抵達':'勝利！前往下一站',450,231,26,'#ffe5a6');}
   ctx.restore();const me=snap.players.find(p=>p.id===socket.id);if(me){const cd=Math.max(0,(me.dodgeReady||0)-(snap.now+now-arrival));const b=document.getElementById('dodgeBtn');b.disabled=state.phase!=='battle'||me.hp<=0||cd>0;b.querySelector('small').textContent=cd>0?'冷卻 '+(cd/1000).toFixed(1)+' 秒':'躲開紅色攻擊區';}
  }
  requestAnimationFrame(loop);

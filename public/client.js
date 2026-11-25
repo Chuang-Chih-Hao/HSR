@@ -128,7 +128,7 @@ function renderMonster() {
   const mon = state.monster;
   $('battleTag').textContent = state.phase === 'paused' ? '⏸ 等待隊友重連' :
     state.phase === 'reward' ? '🎁 車站補給' : state.phase === 'transition' ? '✨ 擊敗怪物！前往下一關' : mon?.boss ? '🔥 終點 BOSS 戰' : '⚔️ 野外遭遇戰';
-  $('currentStation').textContent = `📍 ${state.station}`;
+  $('currentStation').textContent = `📍 ${state.station} · 波次 ${state.arena?.wave||1}/${state.arena?.totalWaves||1}`;
   $('monsterName').textContent = mon?.name || '勇者列車前進中';
   $('monsterEmoji').textContent = mon?.emoji || '🚄';
   $('monsterEmoji').setAttribute('aria-label', mon?.name || '列車');

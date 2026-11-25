@@ -100,10 +100,13 @@ function makeServer() {
       emit(room);
       return;
     }
-    room.monster = { name: spec.name, emoji: spec.emoji, hp: spec.maxHp, maxHp: spec.maxHp, damage: spec.damage, boss: spec.boss };
+    room.wave=room.wave||1;
+    room.totalWaves=!spec.boss&&(room.route==='express'?room.stage>0:[2,5,8].includes(room.stage))?2:1;
+    const second=room.wave>1,maxHp=second?Math.round(spec.maxHp*.85):spec.maxHp;
+    room.monster = { name: second?spec.name+'・增援':spec.name, emoji: spec.emoji, hp:maxHp,maxHp,damage:spec.damage+(second?2:0),boss:spec.boss };
     room.phase = room.players.length === 2 ? 'battle' : 'paused';
     arena.initArena(room, Date.now());
-    addLog(room, `🚄 抵達 ${spec.station}！${spec.boss ? '魔王出現：' : '遇到'}${spec.name}`);
+    addLog(room, `🚄 ${spec.station} · 第 ${room.wave}/${room.totalWaves} 波：${room.monster.name}`);
     emit(room);
   }
   function grantXp(player, amount, room) {
@@ -124,6 +127,10 @@ function makeServer() {
     room.monster.hp = 0;
     room.phase = 'transition';
     arena.event(room,'victory',room.monster.x,room.monster.y);
+    if(room.wave<room.totalWaves){
+      room.wave++;for(const p of room.players)p.hp=Math.min(p.maxHp,Math.max(p.hp,Math.ceil(p.maxHp*.25))+12);
+      addLog(room,'⚠️ 增援即將抵達！');emit(room);setTimeout(()=>spawn(room),2100);return;
+    }
     for (const player of room.players) grantXp(player, spec.xp, room);
     addLog(room, `🏆 擊敗 ${spec.name}！每人獲得 ${spec.xp} EXP`);
     room.phase='reward';room.rewardDeadline=Date.now()+15000;room.rewardChosen={};
@@ -132,7 +139,7 @@ function makeServer() {
   function finishReward(room){
     if(room.phase!=='reward')return;
     for(const p of room.players)if(!room.rewardChosen[p.id])arena.applyReward(p,'heart');
-    room.stage++;room.phase='transition';emit(room);
+    room.stage++;room.wave=1;room.phase='transition';emit(room);
     setTimeout(()=>spawn(room),2100);
   }
   function leave(socket) {
@@ -268,7 +275,7 @@ function makeServer() {
     socket.on('game:start', (_, ack) => withRoom(socket, ack, room => {
       if (room.hostId !== socket.id || room.phase !== 'lobby') return ack?.({ ok: false, error: '只有房主能開始遊戲' });
       if (room.players.length !== 2) return ack?.({ ok: false, error: '需要兩位玩家才能出發' });
-      room.stage = 0;
+      room.stage = 0;room.wave=1;room.totalWaves=1;room.objective=null;
       room.monster = null;
       room.encounters = buildEncounters(room.route);
       room.phase = 'transition';
@@ -315,7 +322,7 @@ function makeServer() {
     socket.on('game:restart', (_, ack) => withRoom(socket, ack, room => {
       if (room.hostId !== socket.id || !['finished', 'failed'].includes(room.phase)) return ack?.({ ok: false, error: '只有房主可以重新開始' });
       room.phase = 'lobby';
-      room.stage = 0;
+      room.stage = 0;room.wave=1;room.totalWaves=1;room.objective=null;
       room.monster = null;
       room.log = ['🔁 新冒險準備中，請再次選擇路線。'];
       for (const p of room.players) Object.assign(p, freshPlayer(p.id, p.name));
