@@ -159,7 +159,7 @@ export function addStationArchitecture(group,station,api){
  }
  function rail(x,z0=-167,z1=167){
    const len=z1-z0,cz=(z0+z1)/2;raw(3.4,.15,len,dark,x,-.48,cz);
-   for(const off of [-1.12,1.12])raw(.11,.16,len,steel,x+off,-.32,cz);
+   for(const off of [-.7175,.7175])raw(.11,.16,len,steel,x+off,-.32,cz);
    for(let z=z0+2;z<z1;z+=1.4)raw(2.9,.09,.34,concrete,x,-.41,z);
  }
  // Additional tracks are visual approximations. The playable rail is kept straight at x=0.

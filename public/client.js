@@ -127,7 +127,7 @@ function renderRoute() {
 function renderMonster() {
   const mon = state.monster;
   $('battleTag').textContent = state.phase === 'paused' ? '⏸ 等待隊友重連' :
-    state.phase === 'transition' ? '✨ 擊敗怪物！前往下一關' : mon?.boss ? '🔥 終點 BOSS 戰' : '⚔️ 野外遭遇戰';
+    state.phase === 'reward' ? '🎁 車站補給' : state.phase === 'transition' ? '✨ 擊敗怪物！前往下一關' : mon?.boss ? '🔥 終點 BOSS 戰' : '⚔️ 野外遭遇戰';
   $('currentStation').textContent = `📍 ${state.station}`;
   $('monsterName').textContent = mon?.name || '勇者列車前進中';
   $('monsterEmoji').textContent = mon?.emoji || '🚄';
@@ -167,6 +167,10 @@ function renderParty() {
   const energy = me?.energy || 0;
   document.querySelectorAll('#energyDots span').forEach((dot, i) => dot.classList.toggle('full', i < energy));
   $('energyText').textContent = `${energy} / 3`;
+  const reward=state.reward;show('rewardPanel',state.phase==='reward');
+  const selected=!!reward?.chosen?.[socket.id];$('rewardStatus').textContent=teacherViewing?'學生選擇中':selected?'已選擇，等待隊友':'15 秒內選擇，逾時自動補生命';
+  document.querySelectorAll('[data-reward]').forEach(b=>b.disabled=!me||selected||state.phase!=='reward');
+  $('roleHint').textContent=me?(me.role==='support'?'支援勇者：必殺技為附近隊友提供護盾，補血較強':'守衛勇者：攻擊力提升，與隊友交替攻擊可破盾')+' · 攻擊加成 +'+(me.attackBonus||0):'';
   const canAct = state.phase === 'battle' && (me?.hp || 0) > 0;
   $('attackBtn').disabled = !canAct;
   $('skillBtn').disabled = !canAct || energy < 3;
@@ -218,6 +222,7 @@ $('startBtn').addEventListener('click', () => request('game:start', {}));
 $('restartBtn').addEventListener('click', () => request('game:restart', {}));
 document.querySelectorAll('.route-choice').forEach(button => button.addEventListener('click', () => request('room:setRoute', { route: button.dataset.route })));
 function battleAction(kind) { request('battle:action', { kind }); }
+document.querySelectorAll('[data-reward]').forEach(b=>b.addEventListener('click',()=>request('battle:reward',{choice:b.dataset.reward})));
 $('attackBtn').addEventListener('click', () => battleAction('attack'));
 $('skillBtn').addEventListener('click', () => battleAction('skill'));
 $('healBtn').addEventListener('click', () => battleAction('heal'));

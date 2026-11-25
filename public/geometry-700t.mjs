@@ -16,22 +16,22 @@ const BASE_Y=0.88;
 const ROOF_Y=BASE_Y+CAR_HEIGHT_700T;
 
 // d metres forward of the carbody/nose join, half-width, bottom y, top y.
-// Padded shoulders, nearly flat lower lip and rounded nose replace the old
-// long cone shape. Control points are artist-made, not official 700T CAD.
+// Photo-referenced taper, raised rounded shoulder and curved lower nose.
+// Artist-estimated cross sections, not original 700T CAD.
 export const NOSE_SECTIONS_700T = Object.freeze([
   [0.0, HALF_WIDTH, BASE_Y, ROOF_Y],
-  [0.65, 1.70, 0.90, 4.50],
-  [1.45, 1.69, 0.91, 4.37],
-  [2.35, 1.65, 0.93, 4.13],
-  [3.30, 1.58, 0.95, 3.80],
-  [4.25, 1.52, 0.98, 3.42],
-  [5.20, 1.43, 1.01, 3.04],
-  [6.20, 1.36, 1.05, 2.64],
-  [7.00, 1.22, 1.10, 2.28],
-  [7.53, 1.00, 1.14, 1.98],
-  [7.82, 0.72, 1.19, 1.79],
-  [7.97, 0.42, 1.25, 1.60],
-  [8.00, 0.24, 1.30, 1.49]
+  [0.65, 1.68, 0.89, 4.50],
+  [1.45, 1.64, 0.91, 4.36],
+  [2.35, 1.57, 0.95, 4.10],
+  [3.30, 1.48, 0.98, 3.78],
+  [4.25, 1.35, 1.02, 3.40],
+  [5.20, 1.19, 1.07, 3.01],
+  [6.20, 1.00, 1.13, 2.62],
+  [7.00, 0.79, 1.20, 2.25],
+  [7.53, 0.58, 1.27, 1.98],
+  [7.82, 0.39, 1.34, 1.81],
+  [7.97, 0.23, 1.41, 1.68],
+  [8.00, 0.14, 1.45, 1.59]
 ]);
 
 // Equally spaced cars at prototype metre lengths, with each end-car nose
@@ -77,8 +77,8 @@ export function noseSectionAt(distance){
 export function noseSurfacePoint(distance,angle,anchor,sign,offset=0){
   const [,width,bottom,top]=noseSectionAt(distance);
   const sectionFraction=Math.min(1,distance/NOSE_LENGTH_700T);
-  const shoulderExponent=.48+.38*sectionFraction;
-  const verticalExponent=.53+.38*sectionFraction;
+  const shoulderExponent=.48+.60*sectionFraction;
+  const verticalExponent=.53+.48*sectionFraction;
   const cs=Math.cos(angle),sn=Math.sin(angle);
   const x=width*Math.sign(cs)*Math.pow(Math.abs(cs),shoulderExponent)+offset*cs;
   const y=(top+bottom)/2+(top-bottom)/2*Math.sign(sn)*Math.pow(Math.abs(sn),verticalExponent)+offset*sn;

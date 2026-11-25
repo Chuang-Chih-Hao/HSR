@@ -54,9 +54,9 @@ export function approachingSpeed(distance, selectedSpeed) {
 export function speakableAnnouncement(station, direction, phase) {
   if (!station || !Object.hasOwn(DIRECTION, direction)) throw new Error('無效車站或方向');
   const directionName = DIRECTION[direction];
-  if (phase === 'approach') return `各位旅客您好，列車即將抵達${station.zh}站。請準備下車。`;
-  if (phase === 'arrive') return `${station.zh}站到了。請留意月台與列車間隙，祝您旅途愉快。`;
-  if (phase === 'depart') return `歡迎搭乘本次${directionName}高鐵模擬列車。車門即將關閉，請注意安全。`;
+  if (phase === 'approach') return `各位旅客，您好。列車即將抵達${station.zh}站。請準備您的隨身行李，並於列車停妥後，再起身下車。`;
+  if (phase === 'arrive') return `${station.zh}站，到了。下車時，請留意列車與月台間的空隙，並攜帶您的隨身物品。謝謝。`;
+  if (phase === 'depart') return `各位旅客，歡迎搭乘本次${directionName}列車。列車即將出發，請坐穩扶好。祝您旅途愉快。`;
   throw new Error('無效廣播類型');
 }
 

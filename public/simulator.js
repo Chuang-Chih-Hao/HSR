@@ -187,10 +187,10 @@ function buildNose(parent, isLeading, anchor) {
   };
   // 700T uses a wide orange waist/sweeping cheek on BOTH sides; the white
   // central face remains visible. The two runs meet around the rounded lip.
-  const upper=t=>-.12+.34*t*t,lower=t=>-.34-.46*t;
+  const upper=t=>-.21+.18*t+.22*t*t,lower=t=>-.45-.34*t;
   patch(0,8,lower,upper,materials.orange,.035);
   patch(0,8,t=>Math.PI-upper(t),t=>Math.PI-lower(t),materials.orange,.035);
-  patch(7.0,8,Math.PI+.38,Math.PI*2-.38,materials.orange,.038);
+  patch(6.8,8,Math.PI+.22,Math.PI*2-.22,materials.orange,.026);
   // Dark, low under-nose pan is distinct from the orange side cheeks.
   patch(.0,7.55,Math.PI+1.07,Math.PI*2-1.07,materials.underbody,.018);
 
@@ -198,11 +198,11 @@ function buildNose(parent, isLeading, anchor) {
     metalness:.33,clearcoat:1,side:THREE.DoubleSide});
   // Convex windshield: broad near the roof/cab and gently tapers as the
   // glass follows the sloping upper surface. It is not a black rectangular box.
-  const edge=t=>.53+.21*Math.pow(2*t-1,4);
-  patch(.65,3.8,edge,t=>Math.PI-edge(t),glass,.038);
+  const edge=t=>.47+.24*Math.pow(2*t-1,4);
+  patch(.52,3.74,edge,t=>Math.PI-edge(t),glass,.028);
   const glazing=new THREE.MeshPhysicalMaterial({color:0x29495f,roughness:.15,metalness:.25,clearcoat:1,side:THREE.DoubleSide});
   const inner=t=>.67+.15*Math.pow(2*t-1,4);
-  patch(.91,2.69,inner,t=>Math.PI-inner(t),glazing,.060);
+  patch(.78,2.65,inner,t=>Math.PI-inner(t),glazing,.045);
   // Tiny non-illuminated central windscreen divider and a slim wiper.
   for(const a of [1.14,2.0])rod(parent,surface(1.39,a,.080),surface(2.62,a+.12,.080),.016,materials.dark);
   // Four lights are small recessed pairs BELOW the windscreen, rather than
@@ -211,7 +211,7 @@ function buildNose(parent, isLeading, anchor) {
     const a=side<0?Math.PI-1.37:.82,b=side<0?Math.PI-.82:1.37;
     patch(3.12,3.74,a,b,materials.dark,.060);
     const lampMat=isLeading?materials.lamp:new THREE.MeshStandardMaterial({color:0xca2424,emissive:0xa01111,emissiveIntensity:.8,side:THREE.DoubleSide});
-    patch(3.23,3.61,a+.08,b-.08,lampMat,.078);
+    for(let i=0;i<2;i++){const aa=a+.06+i*(b-a)*.46;patch(3.23,3.59,aa,aa+(b-a)*.34,lampMat,.071);}
   }
   return shell;
 }
@@ -236,10 +236,11 @@ function buildTrain(scene) {
           const strip=new THREE.Mesh(skinGeometry(skinStrip(z0,z1,{side,yMin:y0,yMax:y1,offset})),mat);group.add(strip);
         }
       }
-      for(let z=bodyStart+1.45;z<bodyEnd-1.25;z+=2.05){
+      for(let z=bodyStart+1.45;z<bodyEnd-1.25;z+=1.58){
         if(Math.abs(z-doorPos)<1.42)continue;
-        box(group,.035,.76,1.26,materials.glass,side*1.704,3.12,z);
-        box(group,.039,.065,1.32,materials.roof,side*1.727,3.55,z);
+        const windowFrame=box(group,.035,.83,.99,materials.dark,side*1.704,3.12,z);
+        box(group,.041,.73,.88,materials.glass,side*1.728,3.12,z);
+        box(group,.042,.045,.95,materials.roof,side*1.728,3.55,z);
       }
       const doorLeft=makeDoorLeaf(group,side,doorPos-DOOR_WIDTH/4);
       const doorRight=makeDoorLeaf(group,side,doorPos+DOOR_WIDTH/4);
@@ -252,12 +253,17 @@ function buildTrain(scene) {
     box(group,2.75,.17,bodyLength-.35,materials.roof,0,4.56,center);
     box(group,2.5,.27,bodyLength-.38,materials.dark,0,.80,center);
     for(const wheelZ of [bodyStart+2.8,bodyEnd-2.8]){
-      box(group,2.75,.40,2.65,materials.dark,0,.67,wheelZ);
-      for(const side of [-1,1]){
-        const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.45,.45,.18,18),materials.dark);
-        wheel.rotation.z=Math.PI/2;wheel.position.set(side*1.39,.47,wheelZ);
-        group.add(wheel);wheels.push(wheel);
+      box(group,2.28,.40,3.0,materials.dark,0,.67,wheelZ);
+      for(const axle of [-1.15,1.15]){
+        rod(group,[-.94,.25,wheelZ+axle],[.94,.25,wheelZ+axle],.09,materials.steel);
+        for(const side of [-1,1]){
+          const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.45,.45,.14,24),materials.dark);
+          wheel.rotation.z=Math.PI/2;wheel.position.set(side*.7175,.27,wheelZ+axle);
+          group.add(wheel);wheels.push(wheel);
+          cylinder(group,.14,.14,.32,materials.steel,side*1.03,.67,wheelZ+axle,12);
+        }
       }
+      for(const side of [-1,1])box(group,.16,.24,2.9,materials.underbody,side*1.17,.58,wheelZ);
     }
     for(let z=bodyStart+2.4;z<bodyEnd-2;z+=4.6)box(group,1.55,.08,.15,materials.steel,0,4.73,z);
     if(isFront||isRear)buildNose(group,isFront,car.noseAnchor);
@@ -340,7 +346,7 @@ function buildTerrain(scene,movers) {
   const landscape=new THREE.Mesh(terrainGeo,materials.grass);landscape.receiveShadow=true;scene.add(landscape);
   box(scene,10.4,.72,1800,materials.concrete,0,-1.25,0);
   box(scene,6.9,.22,1800,materials.track,0,-.74,0);
-  for(const x of [-1.12,1.12]){
+  for(const x of [-.7175,.7175]){
     box(scene,.14,.20,1800,materials.steel,x,-.37,0);
     box(scene,.1,.08,1800,materials.roof,x,-.22,0);
   }
@@ -364,8 +370,12 @@ function buildTerrain(scene,movers) {
     tree.position.set(side*rnd(16,100),0,rnd(-355,338));
     const height=rnd(5,14);
     cylinder(tree,.25,.45,height*.35,materials.bark,0,1.15,0,7);
-    const pine=new THREE.Mesh(new THREE.ConeGeometry(height*.34,height,8),randomGenerator()>.45?materials.leaf:materials.leafLight);
-    pine.position.y=height*.65; pine.castShadow=true;tree.add(pine);
+    // Broadleaf trees and layered crowns replace the identical cone forest.
+    for(let k=0;k<4;k++){
+      const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(height*(k===0?.30:.22),1),k%2?materials.leafLight:materials.leaf);
+      crown.position.set(k===0?0:Math.cos(k*2.4)*height*.16,height*(.48+k*.075),k===0?0:Math.sin(k*2.4)*height*.16);
+      crown.scale.set(1,.82,1);crown.castShadow=true;tree.add(crown);
+    }
     scene.add(tree);movers.push({object:tree,cycle:700,stationObstacle:true});
   }
   for(let i=0;i<20;i++){
@@ -373,7 +383,12 @@ function buildTerrain(scene,movers) {
     const w=rnd(7,18),depth=rnd(7,18),h=rnd(11,38);
     const color= new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(rnd(.52,.59),.09,rnd(.52,.76)),roughness:1});
     box(building,w,h,depth,color,0,h/2-3.4,0,true);
-    for(const y of [h*.28,h*.56,h*.78])box(building,w+.1,.17,depth+.1,materials.steel,0,y-3.4,0);
+    for(let y=2.5;y<h-1;y+=3.1){
+      for(const side of [-1,1]){
+        for(let x=-w/2+1.1;x<w/2-.6;x+=2.25)box(building,1.15,1.28,.055,materials.glass,x,y-3.4,side*(depth/2+.04));
+        box(building,.055,.18,depth+.1,materials.steel,side*(w/2+.05),y-4.15,0);
+      }
+    }
     scene.add(building);movers.push({object:building,cycle:700,stationObstacle:true});
   }
   const bridge=new THREE.Group();bridge.position.z=-205;
@@ -435,6 +450,7 @@ function buildRain(scene){
   return {rain,positions,speeds};
 }
 
+function voiceRank(v){return (/natural|neural|premium|enhanced|線上|自然/i.test(v.name)?10:0)+(/HsiaoChen|HsiaoYu|曉臻|曉雨/i.test(v.name)?5:0);}
 class SimulatedAudio {
   constructor(){this.ctx=null;this.buffer=null;this.source=null;this.filter=null;this.gain=null;this.enabled=false;this.voice=true;}
   init(){
@@ -442,6 +458,7 @@ class SimulatedAudio {
     const Ctx=window.AudioContext||window.webkitAudioContext;
     if(!Ctx)return;
     this.ctx=new Ctx();this.gain=this.ctx.createGain();this.gain.gain.value=0;this.gain.connect(this.ctx.destination);
+    this.motor=this.ctx.createOscillator();this.motor.type='triangle';this.motorGain=this.ctx.createGain();this.motorGain.gain.value=0;this.motor.connect(this.motorGain).connect(this.ctx.destination);this.motor.start();
     this.filter=this.ctx.createBiquadFilter();this.filter.type='lowpass';this.filter.frequency.value=650;
     this.filter.connect(this.gain);
     const buffer=this.ctx.createBuffer(1,this.ctx.sampleRate*2,this.ctx.sampleRate);
@@ -449,9 +466,12 @@ class SimulatedAudio {
     for(let i=0;i<channel.length;i++)channel[i]=Math.random()*2-1;
     this.source=this.ctx.createBufferSource();this.source.buffer=buffer;this.source.loop=true;this.source.connect(this.filter);this.source.start();
   }
-  setSpeed(speed){if(!this.ctx||!this.gain)return;
-    this.gain.gain.setTargetAtTime(this.enabled ? .005+speed*.00007:0,this.ctx.currentTime,.3);
-    this.filter.frequency.setTargetAtTime(260+speed*3.5,this.ctx.currentTime,.4);
+  setSpeed(speed,power=0,brake=0,tunnel=false){if(!this.ctx||!this.gain)return;
+    const now=this.ctx.currentTime;
+    this.gain.gain.setTargetAtTime(this.enabled ? (.003+speed*.000065)*(tunnel?1.35:1):0,now,.3);
+    this.filter.frequency.setTargetAtTime((210+speed*3.8)*(tunnel?.66:1),now,.4);
+    this.motor.frequency.setTargetAtTime(43+speed*.83+power*7,now,.25);
+    this.motorGain.gain.setTargetAtTime(this.enabled&&speed>0?.003+power*.0025+brake*.001:0,now,.2);
   }
   tone(freq,time,duration=.17){if(!this.ctx)return;
     const osc=this.ctx.createOscillator(),gain=this.ctx.createGain(),now=this.ctx.currentTime;
@@ -472,13 +492,32 @@ class SimulatedAudio {
     gain.gain.exponentialRampToValueAtTime(.001,now+1.38);
     src.connect(filter).connect(gain).connect(this.ctx.destination);src.start(now);src.stop(now+1.4);
   }
-  speak(text){if(!this.voice||!('speechSynthesis' in window))return;
-    window.speechSynthesis.cancel();
-    const speech=new SpeechSynthesisUtterance(text);speech.lang='zh-TW';speech.rate=.98;speech.pitch=1.03;
-    const voices=window.speechSynthesis.getVoices();speech.voice=voices.find(x=>x.lang.toLowerCase()==='zh-tw')||null;
-    window.speechSynthesis.speak(speech);
+  async speak(text,station=null,phase=null,direction='north'){
+    if(!this.voice)return;this.stopSpeech();const token=this.voiceToken;
+    if(station&&phase){
+      try{
+        const query=new URLSearchParams({station:station.en,phase,direction});
+        const res=await fetch('/api/announcement?'+query,{signal:(this.voiceAbort=new AbortController()).signal});
+        if(token!==this.voiceToken)return;
+        if(res.ok&&res.headers.get('content-type')?.includes('audio/')){
+          const blob=await res.blob();if(token!==this.voiceToken)return;
+          this.voiceUrl=URL.createObjectURL(blob);this.voiceAudio=new Audio(this.voiceUrl);this.voiceAudio.volume=.9;
+          await this.voiceAudio.play();if(token===this.voiceToken)$('voiceQuality').textContent='神經語音 · 台灣華語';return;
+        }
+      }catch(e){if(token!==this.voiceToken)return;}
+    }
+    if(token!==this.voiceToken||!('speechSynthesis' in window))return;
+    const voices=window.speechSynthesis.getVoices(),voice=voices.filter(x=>/^zh[-_]TW$/i.test(x.lang)).sort((a,b)=>voiceRank(b)-voiceRank(a))[0]||null;
+    const speech=new SpeechSynthesisUtterance(text);speech.lang='zh-TW';speech.rate=.90;speech.pitch=1.0;speech.voice=voice;
+    $('voiceQuality').textContent=voice?'裝置語音：'+voice.name:'裝置預設語音（自然音色依系統支援）';
+    const say=()=>{if(token===this.voiceToken&&this.voice)window.speechSynthesis.speak(speech);};
+    this.voiceTimer=setTimeout(say,this.enabled?740:100);
   }
-  stopSpeech(){if('speechSynthesis'in window)window.speechSynthesis.cancel();}
+  stopSpeech(){
+    this.voiceToken=(this.voiceToken||0)+1;clearTimeout(this.voiceTimer);this.voiceAbort?.abort();this.voiceAbort=null;
+    if(this.voiceAudio){this.voiceAudio.pause();this.voiceAudio=null;}if(this.voiceUrl){URL.revokeObjectURL(this.voiceUrl);this.voiceUrl=null;}
+    if('speechSynthesis'in window)window.speechSynthesis.cancel();
+  }
 }
 
 class HighSpeedRailSimulator {
@@ -602,6 +641,7 @@ class HighSpeedRailSimulator {
       this.audio.enabled=!this.audio.enabled;if(this.audio.enabled)this.audio.init();
       const btn=$('soundBtn');btn.setAttribute('aria-pressed',String(this.audio.enabled));btn.textContent=this.audio.enabled?'🔊 音效：開':'🔇 音效：關';
     });
+    $('previewVoice').addEventListener('click',()=>this.announce('approach',this.itinerary.stops[this.current+1]||this.itinerary.stops[this.current]));
     $('voiceBtn').addEventListener('click',()=>{
       this.audio.voice=!this.audio.voice;if(!this.audio.voice)this.audio.stopSpeech();
       const btn=$('voiceBtn');btn.setAttribute('aria-pressed',String(this.audio.voice));btn.textContent=this.audio.voice?'📣 廣播：開':'🔇 廣播：關';
@@ -713,7 +753,7 @@ class HighSpeedRailSimulator {
   announce(type,station){
     const msg=speakableAnnouncement(station,this.direction,type);
     $('announcementText').textContent=msg;
-    this.audio.chime();this.audio.speak(msg);
+    this.audio.chime();this.audio.speak(msg,station,type,this.direction);
   }
   updateStatus(value){$('driveStatus').textContent=value;}
   updateRail(){
@@ -837,7 +877,7 @@ class HighSpeedRailSimulator {
       if(Math.abs(this.tunnel.position.z)<28&&this.speed>180&&this.audio.enabled&&!this.inTunnel)this.audio.pantograph();
       this.inTunnel=Math.abs(this.tunnel.position.z)<32;
     }
-    this.audio.setSpeed(this.overrun?0:this.speed);
+    this.audio.setSpeed(this.overrun?0:this.speed,this.power,this.brake,this.inTunnel);
     this.doorLevel=THREE.MathUtils.damp(this.doorLevel,this.doorsOpen?1:0,3.2,dt);
     for(const d of this.train.doors){
       const station=this.itinerary.stops[this.current];

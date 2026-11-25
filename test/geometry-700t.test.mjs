@@ -36,11 +36,11 @@ test('nose roof slopes steadily without an abnormal needle or point in mid-cours
   let lastTop=Infinity;
   for(let d=0;d<=8;d+=.05){
     const [,w,bottom,top]=noseSectionAt(d);
-    assert.ok(w>=.2&&w<=1.8,`width at ${d} is reasonable ${w}`);
+    assert.ok(w>=.14-1e-6&&w<=1.8,`width at ${d} is reasonable ${w}`);
     assert.ok(bottom<top,`section at ${d} must not invert`);
     assert.ok(top<=lastTop+.003,`roof profile has no bump at ${d}`);
     lastTop=top;
-    if(d<=5.2)assert.ok(w>=1.40,`nose shoulder must stay broad until d=${d}`);
+    if(d<=3.3)assert.ok(w>=1.47,`nose shoulder at d=${d}`);
   }
 });
 test('leading and trailing nose geometry have matching longitudinal symmetry',()=>{
@@ -68,5 +68,5 @@ test('full train body layout, camera and 334m platform follow the 304m dimension
 test('nose lip is sealed and both end caps use mirrored winding',()=>{
   assert.match(sim,/const cap=verts.length\/3/);
   assert.match(sim,/if\(isLeading\)tri.push\(cap,m,n\);else tri.push\(cap,n,m\)/);
-  assert.ok(noseSectionAt(7)[1]>=1.2,'preserve broad shoulders near the tip');
+  assert.ok(noseSectionAt(7)[1]<.85,'taper toward the rounded tip rather than a wide duckbill');
 });

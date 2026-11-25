@@ -41,7 +41,7 @@ function buildEncounters(route) {
     return EXPRESS_MONSTERS.map(([name, emoji], index) => ({
       station: index === 0 ? '左營出發' : index === 3 ? '南港終點' : `直達途中 ${index}`,
       name, emoji, boss: index === 3,
-      maxHp: index === 3 ? 230 : 82 + index * 45,
+      maxHp: index === 3 ? 980 : 260 + index * 130,
       damage: index === 3 ? 18 : 10 + index * 3,
       xp: index === 3 ? 105 : 35 + index * 14,
       coins: 18 + index * 11
@@ -49,14 +49,14 @@ function buildEncounters(route) {
   }
   return LOCAL_MONSTERS.map(([name, emoji], index) => ({
     station: STATIONS[index + 1], name, emoji, boss: index === 10,
-    maxHp: index === 10 ? 265 : 46 + index * 16,
+    maxHp: index === 10 ? 1100 : 140 + index * 38,
     damage: index === 10 ? 17 : 6 + Math.floor(index / 2),
     xp: index === 10 ? 110 : 25 + index * 6,
     coins: 8 + index * 3
   }));
 }
 function freshPlayer(id, name) {
-  return { id, name, hp: 100, maxHp: 100, level: 1, xp: 0, xpNeeded: 50, energy: 0, coins: 0, lastAction: 0, totalDamage: 0, online: true };
+  return { id, name, hp: 100, maxHp: 100, level: 1, xp: 0, xpNeeded: 50, energy: 0, coins: 0, attackBonus:0, role:null,lastAction: 0, totalDamage: 0, online: true };
 }
 function addLog(room, message) {
   room.log.push(message);
@@ -70,14 +70,16 @@ function publicState(room) {
     hostConnected: !!room.hostId, stage: room.stage, totalStages: room.encounters.length,
     stationNames: STATIONS, station: encounter ? encounter.station : (room.stage >= room.encounters.length ? '南港' : '左營'),
     monster: room.monster ? { ...room.monster } : null,
-    players: room.players.map(({ id, name, hp, maxHp, level, xp, xpNeeded, energy, coins, totalDamage }) =>
-      ({ id, name, hp, maxHp, level, xp, xpNeeded, energy, coins, totalDamage })),
+    players: room.players.map(({ id, name, hp, maxHp, level, xp, xpNeeded, energy, coins, totalDamage,role,attackBonus }) =>
+      ({ id, name, hp, maxHp, level, xp, xpNeeded, energy, coins, totalDamage,role,attackBonus })),
+    reward:room.phase==='reward'?{deadline:room.rewardDeadline,chosen:room.rewardChosen}:null,
     arena: arena.frame(room, Date.now()), log: room.log.slice(), winner: room.phase === 'finished'
   };
 }
 function makeServer() {
   const app = express();
   app.disable('x-powered-by');
+  require('./announcement-audio').registerAnnouncements(app);
   // Expose local Three.js ESM assets so Render needs no external browser CDN.
   app.use('/vendor/three', express.static(path.join(__dirname, 'node_modules', 'three'), { maxAge: '1d' }));
   app.use(express.static(path.join(__dirname, 'public')));
@@ -124,9 +126,14 @@ function makeServer() {
     arena.event(room,'victory',room.monster.x,room.monster.y);
     for (const player of room.players) grantXp(player, spec.xp, room);
     addLog(room, `🏆 擊敗 ${spec.name}！每人獲得 ${spec.xp} EXP`);
-    room.stage += 1;
+    room.phase='reward';room.rewardDeadline=Date.now()+15000;room.rewardChosen={};
     emit(room);
-    setTimeout(() => spawn(room), 1700);
+  }
+  function finishReward(room){
+    if(room.phase!=='reward')return;
+    for(const p of room.players)if(!room.rewardChosen[p.id])arena.applyReward(p,'heart');
+    room.stage++;room.phase='transition';emit(room);
+    setTimeout(()=>spawn(room),2100);
   }
   function leave(socket) {
     const code = socket.data.roomCode;
@@ -272,6 +279,12 @@ function makeServer() {
       ack?.({ ok: true });
     }));
     socket.on('battle:move', (payload) => withRoom(socket, null, (room, player) => {if(room.phase==='battle'&&player.hp>0)arena.input(player,payload,Date.now());},true));
+    socket.on('battle:reward',(payload={},ack)=>withRoom(socket,ack,(room,p)=>{
+      if(room.phase!=='reward'||room.rewardChosen[p.id]||!arena.applyReward(p,payload?.choice))return ack?.({ok:false,error:'目前不能選擇獎勵'});
+      room.rewardChosen[p.id]=payload.choice;addLog(room,p.name+' 選擇了車站補給');
+      if(room.players.length===2&&room.players.every(p=>room.rewardChosen[p.id]))finishReward(room);else emit(room);
+      ack?.({ok:true});
+    },true));
     socket.on('battle:action', (payload = {}, ack) => withRoom(socket, ack, (room, player) => {
       if (room.phase !== 'battle' || !room.monster) return ack?.({ ok: false, error: '目前無法行動' });
       if (player.hp <= 0) return ack?.({ ok: false, error: '體力耗盡，等待隊友完成戰鬥' });
@@ -284,7 +297,7 @@ function makeServer() {
       if (kind === 'heal') {
         player.lastAction=Date.now();player.energy -= 2;
         const target = room.players.reduce((lowest, p) => p.hp / p.maxHp < lowest.hp / lowest.maxHp ? p : lowest);
-        const amount = Math.min(target.maxHp - target.hp, 24 + player.level * 7);
+        const amount = Math.min(target.maxHp - target.hp, (player.role==='support'?34:24) + player.level * 7);
         target.hp += amount;
         arena.event(room,'heal',target.x,target.y,{amount,player:target.id});
         addLog(room, `💚 ${player.name} 為 ${target.name} 恢復 ${amount} HP`);
@@ -318,6 +331,7 @@ function makeServer() {
     const sendFrame=now-lastFrame>=90;if(sendFrame)lastFrame=now;
     for(const [code,room] of rooms){
       if(now-room.touched>ROOM_TTL){rooms.delete(code);io.to(code).emit('game:expired');continue;}
+      if(room.phase==='reward'&&now>=room.rewardDeadline){finishReward(room);continue;}
       if(room.phase!=='battle'||!room.monster)continue;
       const changed=arena.step(room,now,dt);
       if(room.players.every(p=>p.hp<=0)){room.phase='failed';addLog(room,'💔 挑戰失敗！請重新整備。');emit(room);}
